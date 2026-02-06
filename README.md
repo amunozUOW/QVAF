@@ -14,7 +14,7 @@ QVAF helps you understand which quiz questions are vulnerable to students simply
 
 1. **Testing your quiz** against a local AI model in two conditions:
    - **Baseline**: AI answers using only general knowledge
-   - **With course materials**: AI answers with access to your lecture notes/readings (RAG)
+   - **With course materials**: AI answers with access to your lecture notes/readings, uses Retreival Augmented Generation (RAG)
 
 2. **Measuring AI performance**:
    - Which questions does AI get right?
@@ -284,9 +284,6 @@ qvaf/
 │
 ├── ARCHITECTURE.md             # Technical documentation
 ├── QVAF_Literature_Review.md   # Theoretical foundations + literature review
-├── docs/
-│   └── QUIZ_VULNERABILITY_PROJECT_DOCUMENTATION.md  # Developer notes
-│
 ├── output/                     # Generated files
 │   ├── raw_attempts/          # Quiz attempt JSON files
 │   ├── reports/               # Analysis reports
