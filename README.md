@@ -39,7 +39,7 @@ Rather than trying to detect AI use after the fact, QVAF helps you **proactively
 
 **This is not about "AI-proofing" your quizzes**—that's impossible. It's about understanding your vulnerability profile and making informed decisions about acceptable risk.
 
-📚 [Read the theoretical foundations →](docs/THEORY.md)
+📚 [Read the theoretical foundations →](QVAF_Literature_Review.md)
 
 ---
 
@@ -282,10 +282,10 @@ qvaf/
 ├── merge_attempts.py           # Combines baseline + RAG results
 ├── requirements.txt            # Python dependencies
 │
+├── ARCHITECTURE.md             # Technical documentation
+├── QVAF_Literature_Review.md   # Theoretical foundations + literature review
 ├── docs/
-│   ├── THEORY.md              # Theoretical foundations
-│   ├── ARCHITECTURE.md        # Technical documentation
-│   └── METHODOLOGY.md         # Research methodology
+│   └── QUIZ_VULNERABILITY_PROJECT_DOCUMENTATION.md  # Developer notes
 │
 ├── output/                     # Generated files
 │   ├── raw_attempts/          # Quiz attempt JSON files

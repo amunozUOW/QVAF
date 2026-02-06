@@ -1,6 +1,6 @@
 # Literature Review: Theoretical Foundations for a Quiz Vulnerability Assessment Framework
 
-A robust body of regulatory guidance and empirical research now supports the design of assessment tools that help educators evaluate AI vulnerability in online quizzes. This review synthesizes evidence across four domains: regulatory frameworks for AI-irrelevant assessment design, empirical patterns in LLM performance by question type and cognitive level, research on LLM reliability and hallucination, and technology adoption considerations for assessment tools. The central finding is consistent: **structural assessment redesign—not AI detection—represents the sustainable path forward**, with cognitive complexity emerging as the strongest predictor of question vulnerability.
+A robust body of regulatory guidance and empirical research now supports the design of assessment tools that help educators evaluate AI vulnerability in online quizzes. This review synthesizes evidence across five domains: regulatory frameworks for AI-irrelevant assessment design, empirical patterns in LLM performance by question type and cognitive level, research on LLM reliability and hallucination, technology adoption considerations for assessment tools, and QVAF-specific design rationale. The central finding is consistent: **structural assessment redesign—not AI detection—represents the sustainable path forward**, with cognitive complexity emerging as the strongest predictor of question vulnerability.
 
 ---
 
@@ -152,6 +152,111 @@ Common barriers include lack of training, time, and incentives (Brownell & Tanne
 
 ---
 
+## 5. QVAF Design Rationale and Methodology
+
+The preceding literature review establishes the empirical and theoretical foundations for QVAF. This section documents how these foundations translate into specific design decisions.
+
+### Problem Scope: What QVAF Addresses
+
+QVAF addresses one specific behaviour: **students copying quiz questions directly into an AI system and using the AI-generated answer**. This scope is deliberately narrow—by focusing on a tractable, well-defined problem, the tool provides actionable insights rather than vague warnings about "AI risks."
+
+The following behaviours are explicitly outside scope:
+
+| Behaviour | Why Excluded |
+|-----------|--------------|
+| Contract cheating (human assistance) | Different intervention required; not an AI problem |
+| Sophisticated prompt engineering | Assumes basic copy-paste behaviour most students would use |
+| Real-time AI assistance during proctored exams | Requires different controls (proctoring, browser lockdown) |
+| AI-assisted learning followed by legitimate recall | This is arguably desirable learning behaviour |
+| Multi-modal cheating (photo → AI) | Addressed partially via image-based question testing |
+
+### The QVAF Five-Level Cognitive Demand Taxonomy
+
+Synthesising Bloom's Revised Taxonomy, Webb's Depth of Knowledge, and SOLO Taxonomy for application to quiz vulnerability assessment:
+
+| Level | Name | Description | Typical Indicators |
+|-------|------|-------------|-------------------|
+| **1** | Recall | Direct retrieval of memorised facts, definitions, or procedures | "Define...", "What is...", "List...", "Name..." |
+| **2** | Routine Application | Applying known procedures where method selection is obvious | "Calculate using...", "Apply the formula...", "Follow the steps..." |
+| **3** | Conceptual Understanding | Demonstrating understanding of relationships between concepts | "Explain why...", "How does X relate to Y...", "Compare..." |
+| **4** | Analytical Reasoning | Breaking down complex information; evaluating evidence | "Analyze the data...", "Evaluate the argument...", "What conclusions..." |
+| **5** | Strategic Integration | Synthesising multiple sources; applying to novel situations | "Design a solution...", "How would you address this new scenario..." |
+
+**Discipline-Agnostic Application**: The taxonomy is designed for application across disciplines:
+
+| Discipline | Level 1 Example | Level 5 Example |
+|------------|-----------------|-----------------|
+| Psychology | "Define operant conditioning" | "Design an intervention for a novel behavioural problem using multiple theoretical frameworks" |
+| Engineering | "State the formula for stress" | "Propose a design solution for a novel constraint set requiring trade-off analysis" |
+| Business | "List the 4 Ps of marketing" | "Develop a market entry strategy for an unfamiliar market given incomplete information" |
+| Nursing | "Name the stages of wound healing" | "Prioritise care for multiple patients with conflicting needs and resource constraints" |
+
+### Two-Condition Testing Methodology
+
+QVAF tests each question under two conditions to simulate realistic student cheating scenarios:
+
+| Condition | What It Simulates | What It Reveals |
+|-----------|-------------------|-----------------|
+| **Baseline** (no RAG) | Student copying question into general-purpose AI | Vulnerability to general AI knowledge |
+| **Enhanced** (with RAG) | Student using AI with access to course materials | Additional vulnerability from course-specific content |
+
+The combination of baseline and RAG results creates descriptive patterns:
+
+| Pattern | Baseline | RAG | Interpretation |
+|---------|----------|-----|----------------|
+| **Correct Both** | ✓ | ✓ | AI succeeds regardless of materials access |
+| **Correct RAG Only** | ✗ | ✓ | Course materials specifically enable AI success |
+| **Incorrect Both** | ✗ | ✗ | Question resists AI assistance |
+| **Correct Baseline Only** | ✓ | ✗ | Anomalous; RAG may introduce confusion |
+
+**Important**: These are descriptive patterns, not vulnerability judgments. The educator interprets what these patterns mean in their specific context.
+
+### Why Multi-Sample Testing
+
+Even at temperature=0 (greedy decoding), LLMs produce variable outputs due to floating-point operation ordering, GPU parallelism effects, and batching variations. Multi-sample testing captures meaningful variability: a question answered correctly 10/10 times differs meaningfully from one answered correctly 7/10 times—the latter shows exploitable uncertainty that well-constructed distractors might leverage.
+
+### Design Philosophy: Decision-Support, Not Prescription
+
+QVAF is designed as an **assistant to educators**, not as an authoritative system:
+
+| The Tool... | The Educator... |
+|-------------|-----------------|
+| Provides objective metrics | Interprets what metrics mean in context |
+| Classifies cognitive demand | Validates or overrides classifications |
+| Generates recommendations | Accepts, modifies, or rejects suggestions |
+| Identifies patterns | Decides what action to take |
+
+**Why No Categorical Vulnerability Labels**: The framework explicitly avoids assigning categorical labels (e.g., "HIGH RISK", "LOW RISK") because:
+
+1. **Context matters**: A question where AI achieves 70% accuracy may be acceptable in a formative quiz but concerning in a high-stakes exam
+2. **Stakes vary**: Different assessments warrant different thresholds
+3. **Professional autonomy**: Educators should make assessment decisions, not automated systems
+4. **Disciplinary variation**: What constitutes "vulnerable" differs by field
+
+### Scope and Known Limitations
+
+**QVAF is designed for:**
+- Unproctored online quizzes where students have unrestricted access to external resources
+- MCQ, true/false, and short-answer formats (auto-gradeable question types)
+- Single LLM testing using a representative model rather than comprehensive multi-model benchmarking
+
+**Known Limitations:**
+
+| Limitation | Implication | Mitigation |
+|------------|-------------|------------|
+| Single model testing | Results reflect one AI system, not all possible systems | Use a capable, representative model; acknowledge limitation in reports |
+| LLM-based classification | Cognitive demand classification uses the same technology being tested | Treat classifications as suggestions requiring educator validation |
+| Point-in-time assessment | LLM capabilities change; today's resistant question may be vulnerable tomorrow | Periodic re-testing recommended; framework supports re-assessment |
+| MCQ format constraints | Some learning objectives cannot be validly assessed via MCQ regardless of AI-resistance | Tool can identify such cases; "consider alternative format" is a valid recommendation |
+
+**What QVAF Cannot Do:**
+- Guarantee AI-proof questions (no tool can make this guarantee)
+- Replace educator judgment (the tool informs decisions; it does not make them)
+- Detect AI use after the fact (this is a proactive redesign tool, not a detection tool)
+- Address all cheating behaviours (scope is limited to one specific, common behaviour)
+
+---
+
 ## Conclusion: Key Implications for QVAF Design
 
 This literature review supports several design principles for a Quiz Vulnerability Assessment Framework:
@@ -200,6 +305,8 @@ Khatun, A., & Brown, D. G. (2024). TruthEval: A dataset to evaluate LLM truthful
 
 Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., Küttler, H., Lewis, M., Yih, W., Rocktäschel, T., Riedel, S., & Kiela, D. (2020). Retrieval-augmented generation for knowledge-intensive NLP tasks. In *Advances in Neural Information Processing Systems 33 (NeurIPS 2020)* (pp. 9459–9474). https://proceedings.neurips.cc/paper/2020/hash/6b493230205f780e1bc26945df7481e5-Abstract.html
 
+Liang, W., Yuksekgonul, M., Mao, Y., Wu, E., & Zou, J. (2023). GPT detectors are biased against non-native English writers. *Patterns*, *4*(7), 100779. https://doi.org/10.1016/j.patter.2023.100779
+
 Li, J., Cheng, X., Zhao, W. X., Nie, J. Y., & Wen, J. R. (2024). HaluEval 2.0: A comprehensive evaluation of hallucination in large language models. In *Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (ACL 2024)* (pp. 1234–1248). Association for Computational Linguistics.
 
 Li, Y., Chen, S., & Zhang, Q. (2024). Open-LLM-Leaderboard: From multi-choice to open-style questions for LLMs evaluation, benchmark, and arena. In *Proceedings of LREC-COLING 2024* (pp. 8765–8779). ELRA and ICCL.
@@ -239,6 +346,8 @@ Tertiary Education Quality and Standards Agency. (2024). *Risk assessment framew
 Venkatesh, V., Morris, M. G., Davis, G. B., & Davis, F. D. (2003). User acceptance of information technology: Toward a unified view. *MIS Quarterly*, *27*(3), 425–478. https://doi.org/10.2307/30036540
 
 Webb, N. L. (1997). *Criteria for alignment of expectations and assessments in mathematics and science education* (Research Monograph No. 6). National Institute for Science Education, University of Wisconsin-Madison.
+
+Weber-Wulff, D., Anohina-Naumeca, A., Bjelobaba, S., Foltýnek, T., Guerrero-Dib, J., Popoola, O., Šigut, P., & Waddington, L. (2023). Testing of detection tools for AI-generated text. *International Journal for Educational Integrity*, *19*(1), 26. https://doi.org/10.1007/s40979-023-00146-z
 
 Xiong, M., Hu, Z., Lu, X., Li, Y., Fu, J., He, J., & Hooi, B. (2024). Can LLMs express their uncertainty? An empirical evaluation of confidence elicitation in LLMs. In *Proceedings of the Twelfth International Conference on Learning Representations (ICLR 2024)*. https://openreview.net/forum?id=gjeQKFxFpZ
 
