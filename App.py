@@ -1105,12 +1105,12 @@ def show_onboarding():
 
 
 # ========================================
-# Helper Functions for RAG Collections
+# Helper Functions for Course Materials
 # ========================================
 
-def get_all_rag_collections():
-    """Get all RAG collections from the database."""
-    collections = []
+def get_all_courses():
+    """Get all course material collections from the database."""
+    courses = []
     try:
         import chromadb
         if os.path.exists(str(CHROMA_DB_PATH)):
@@ -1118,24 +1118,30 @@ def get_all_rag_collections():
             for coll in client.list_collections():
                 if coll.name.startswith(RAG_COLLECTION_PREFIX):
                     display_name = get_display_name(coll.name)
-                    count = coll.count()
-                    collections.append({
+                    # Get file count (unique source files)
+                    files = get_course_files(coll.name)
+                    file_count = len(files)
+                    segment_count = coll.count()
+                    courses.append({
                         'name': coll.name,
                         'display_name': display_name,
-                        'count': count
+                        'file_count': file_count,
+                        'segment_count': segment_count
                     })
     except:
         pass
-    return collections
+    return courses
 
-def get_collection_files(collection_name):
-    """Get list of source files in a collection."""
+# Keep old function name as alias for compatibility
+get_all_rag_collections = get_all_courses
+
+def get_course_files(collection_name):
+    """Get list of source files in a course with their segment counts."""
     files = {}
     try:
         import chromadb
         client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
         coll = client.get_collection(collection_name)
-        # Get all metadata
         results = coll.get(include=['metadatas'])
         for meta in results.get('metadatas', []):
             source = meta.get('source', 'Unknown')
@@ -1143,6 +1149,98 @@ def get_collection_files(collection_name):
     except:
         pass
     return files
+
+# Keep old function name as alias for compatibility
+get_collection_files = get_course_files
+
+def delete_file_from_course(collection_name, filename):
+    """Delete all segments from a specific file in a course."""
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+        coll = client.get_collection(collection_name)
+        # Get all IDs where source matches the filename
+        results = coll.get(include=['metadatas'])
+        ids_to_delete = []
+        for i, meta in enumerate(results.get('metadatas', [])):
+            if meta.get('source') == filename:
+                ids_to_delete.append(results['ids'][i])
+        if ids_to_delete:
+            coll.delete(ids=ids_to_delete)
+            return len(ids_to_delete)
+        return 0
+    except Exception as e:
+        return -1
+
+def clear_course_materials(collection_name):
+    """Delete all materials from a course."""
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+        # Delete and recreate the collection to clear it
+        client.delete_collection(collection_name)
+        client.get_or_create_collection(name=collection_name)
+        return True
+    except Exception as e:
+        return False
+
+def process_uploaded_files(uploaded_files, collection_name, progress_container):
+    """Process uploaded files with progress feedback. Returns total segments added."""
+    import chromadb
+    client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+    coll = client.get_or_create_collection(name=collection_name)
+
+    total_segments = 0
+    total_files = len(uploaded_files)
+
+    for file_idx, uploaded_file in enumerate(uploaded_files):
+        # Update progress
+        progress_container.markdown(f"**Processing file {file_idx + 1} of {total_files}:** {uploaded_file.name}")
+
+        content = ""
+        if uploaded_file.name.endswith('.pdf'):
+            try:
+                from pypdf import PdfReader
+                import io
+                pdf_bytes = uploaded_file.read()
+                reader = PdfReader(io.BytesIO(pdf_bytes))
+                total_pages = len(reader.pages)
+
+                page_texts = []
+                for page_idx, page in enumerate(reader.pages):
+                    progress_container.markdown(f"**Processing file {file_idx + 1} of {total_files}:** {uploaded_file.name}  \nPage {page_idx + 1} of {total_pages}")
+                    page_texts.append(page.extract_text() or "")
+                content = "\n".join(page_texts)
+            except ImportError:
+                progress_container.warning(f"Skipped {uploaded_file.name} - PDF support requires: pip install pypdf")
+                continue
+        else:
+            content = uploaded_file.read().decode('utf-8', errors='ignore')
+
+        if not content.strip():
+            continue
+
+        # Chunk content
+        chunk_size, overlap = 1000, 200
+        chunks = []
+        start = 0
+        while start < len(content):
+            chunk = content[start:start + chunk_size]
+            if chunk.strip():
+                chunks.append(chunk)
+            start += chunk_size - overlap
+
+        if chunks:
+            display_name = get_display_name(collection_name)
+            base_id = f"{display_name}_{uploaded_file.name}".replace(" ", "_")[:50]
+            coll.add(
+                documents=chunks,
+                ids=[f"{base_id}_chunk_{i}" for i in range(len(chunks))],
+                metadatas=[{"source": uploaded_file.name, "chunk": i} for i in range(len(chunks))]
+            )
+            total_segments += len(chunks)
+
+    return total_segments
 
 
 # Landing page - skip the old onboarding, go straight to Instructions view
@@ -1636,137 +1734,107 @@ if tab2 is not None:
 
                 # Course materials upload (Option A - before first scan)
                 if st.session_state.use_rag_mode:
-                    with st.expander("📚 Upload Course Materials (Optional for Option A)", expanded=False):
+                    with st.expander("Course Materials (for Second Scan)", expanded=False):
                         st.markdown("""
-                        **Option A: Upload Before First Scan**
-                    
-                        You can upload course materials now, and they'll be available for the Second Scan.
-                        Materials help show how AI performance changes when it has access to your course content.
-                    
-                        Upload your:
-                        - Lecture slides/notes
-                        - Textbook excerpts
-                        - Study guides
-                        - Required readings
+                        Upload course materials now for use in the Second Scan.
+                        This shows how AI performance changes when it has access to your course content.
                         """)
-                    
-                        # Allow selecting an existing RAG collection or upload to the current selection
-                        all_collections = get_all_rag_collections()
-                        if all_collections:
-                            collection_options = [c['display_name'] for c in all_collections]
-                            # Find index of currently selected
-                            current_idx = 0
-                            for i, name in enumerate(collection_options):
-                                if name == st.session_state.selected_rag_collection:
-                                    current_idx = i
-                                    break
 
-                            col_sel, col_info = st.columns([2, 1])
-                            with col_sel:
+                        # Course selection
+                        all_courses = get_all_courses()
+                        selected_course = st.session_state.selected_rag_collection
+                        selected_internal = get_rag_collection_name(selected_course)
+
+                        # Course selector and new course button
+                        col_course, col_new = st.columns([3, 1])
+                        with col_course:
+                            if all_courses:
+                                course_options = [c['display_name'] for c in all_courses]
+                                current_idx = 0
+                                for i, name in enumerate(course_options):
+                                    if name == selected_course:
+                                        current_idx = i
+                                        break
                                 new_selection = st.selectbox(
-                                    "Use existing course materials (or select to upload to):",
-                                    collection_options,
+                                    "Select course:",
+                                    course_options,
                                     index=current_idx,
-                                    key="tab2_collection_selector"
+                                    key="tab2_course_selector"
                                 )
-                                if new_selection != st.session_state.selected_rag_collection:
+                                if new_selection != selected_course:
                                     st.session_state.selected_rag_collection = new_selection
                                     st.rerun()
+                            else:
+                                st.info("No courses yet. Create one to get started.")
 
-                                # Inline create-new-course flow
-                                with st.expander("➕ Create New Course", expanded=False):
-                                    new_name = st.text_input(
-                                        "Course name",
-                                        placeholder="e.g., PSYC101, Biology 200, History Fall 2024",
-                                        key="new_collection_name_tab2"
-                                    )
-                                    if st.button("Create Course", type="secondary", disabled=not new_name, key="create_course_tab2"):
-                                        try:
-                                            import chromadb
-                                            client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-                                            internal_name = get_rag_collection_name(new_name)
-                                            client.get_or_create_collection(name=internal_name)
-                                            st.session_state.selected_rag_collection = new_name
-                                            st.success(f"✓ Created course: {new_name}")
+                        with col_new:
+                            st.markdown("")  # Spacing
+                            if st.button("+ New", key="new_course_tab2", use_container_width=True):
+                                st.session_state.show_new_course_tab2 = True
+
+                        # New course form (shown when button clicked)
+                        if st.session_state.get('show_new_course_tab2', False):
+                            new_name = st.text_input("Course name:", placeholder="e.g., PSYC101", key="new_course_name_tab2")
+                            col_create, col_cancel = st.columns(2)
+                            with col_create:
+                                if st.button("Create", key="create_btn_tab2", disabled=not new_name):
+                                    try:
+                                        import chromadb
+                                        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+                                        internal_name = get_rag_collection_name(new_name)
+                                        client.get_or_create_collection(name=internal_name)
+                                        st.session_state.selected_rag_collection = new_name
+                                        st.session_state.show_new_course_tab2 = False
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error: {e}")
+                            with col_cancel:
+                                if st.button("Cancel", key="cancel_btn_tab2"):
+                                    st.session_state.show_new_course_tab2 = False
+                                    st.rerun()
+
+                        # Files in current course
+                        st.markdown("---")
+                        course_files = get_course_files(selected_internal)
+
+                        if course_files:
+                            st.markdown(f"**Files in {selected_course}:**")
+                            for filename, segment_count in course_files.items():
+                                col_file, col_del = st.columns([4, 1])
+                                with col_file:
+                                    st.text(f"  {filename} ({segment_count} segments)")
+                                with col_del:
+                                    if st.button("x", key=f"del_{filename}_tab2", help=f"Remove {filename}"):
+                                        deleted = delete_file_from_course(selected_internal, filename)
+                                        if deleted > 0:
                                             st.rerun()
-                                        except Exception as e:
-                                            st.error(f"Error creating course: {e}")
 
-                            with col_info:
-                                # show chunk count if available
-                                try:
-                                    import chromadb
-                                    client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-                                    coll = client.get_collection(get_rag_collection_name(st.session_state.selected_rag_collection))
-                                    cnt = coll.count()
-                                    if cnt > 0:
-                                        st.success(f"✓ {cnt} chunks")
-                                    else:
-                                        st.warning("Empty")
-                                except Exception:
-                                    pass
+                            # Clear all button
+                            if st.button("Clear All Files", key="clear_all_tab2"):
+                                if clear_course_materials(selected_internal):
+                                    st.rerun()
                         else:
-                            st.info("No existing course collections found — you can upload to create one.")
+                            st.caption("No files uploaded yet.")
 
-                        selected_collection = st.session_state.selected_rag_collection
-                        selected_internal_name = get_rag_collection_name(selected_collection)
-
+                        # Upload new files
+                        st.markdown("---")
                         uploaded_files = st.file_uploader(
-                            "Drop course materials here (TXT, MD, or PDF)",
+                            "Upload files (PDF, TXT, MD)",
                             type=['txt', 'md', 'pdf'],
                             accept_multiple_files=True,
-                            key="rag_upload_tab2_before"
+                            key="upload_tab2"
                         )
 
                         if uploaded_files:
-                            if st.button("📥 Add Materials", type="secondary", key="add_rag_tab2_before"):
-                                try:
-                                    import chromadb
-                                    client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-                                    coll = client.get_or_create_collection(name=selected_internal_name)
-
-                                    total_chunks = 0
-                                    for uploaded_file in uploaded_files:
-                                        content = ""
-                                        if uploaded_file.name.endswith('.pdf'):
-                                            try:
-                                                from pypdf import PdfReader
-                                                import io
-                                                reader = PdfReader(io.BytesIO(uploaded_file.read()))
-                                                content = "\n".join([page.extract_text() for page in reader.pages])
-                                            except ImportError:
-                                                st.warning("PDF support requires: pip install pypdf")
-                                                continue
-                                        else:
-                                            content = uploaded_file.read().decode('utf-8', errors='ignore')
-
-                                        if not content.strip():
-                                            continue
-
-                                        # Chunk content
-                                        chunk_size, overlap = 1000, 200
-                                        chunks = []
-                                        start = 0
-                                        while start < len(content):
-                                            chunk = content[start:start + chunk_size]
-                                            if chunk.strip():
-                                                chunks.append(chunk)
-                                            start += chunk_size - overlap
-
-                                        if chunks:
-                                            base_id = f"{selected_collection}_{uploaded_file.name}".replace(" ", "_")[:50]
-                                            coll.add(
-                                                documents=chunks,
-                                                ids=[f"{base_id}_chunk_{i}" for i in range(len(chunks))],
-                                                metadatas=[{"source": uploaded_file.name, "chunk": i} for i in range(len(chunks))]
-                                            )
-                                            total_chunks += len(chunks)
-
-                                    if total_chunks > 0:
-                                        st.success(f"✓ Added {total_chunks} chunks to {selected_collection}!")
+                            if st.button("Upload Files", type="primary", key="upload_btn_tab2"):
+                                progress_area = st.empty()
+                                with progress_area.container():
+                                    st.markdown("**Processing...**")
+                                    progress_text = st.empty()
+                                    total = process_uploaded_files(uploaded_files, selected_internal, progress_text)
+                                    if total > 0:
+                                        progress_text.success(f"Added {len(uploaded_files)} file(s) ({total} segments)")
                                         st.rerun()
-                                except Exception as e:
-                                    st.error(f"Error: {e}")
 
                 st.markdown("**Before you start:**")
                 st.markdown("• Make sure your quiz is open in Chrome")
@@ -1821,139 +1889,110 @@ if tab3 is not None:
                 6. Go to **Results** tab and click **Generate Report** for detailed analysis
 
                 **What this tests:** Can someone pass by uploading your lecture notes to an AI?
-                This scan gives the AI access to your course materials via RAG.
+                This scan gives the AI access to your course materials.
                 """)
 
-            # Check RAG status for the SELECTED collection
-            selected_collection = st.session_state.selected_rag_collection
-            selected_internal_name = get_rag_collection_name(selected_collection)
-            rag_count = 0
-            try:
-                import chromadb
-                if os.path.exists(str(CHROMA_DB_PATH)):
-                    client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-                    try:
-                        coll = client.get_collection(selected_internal_name)
-                        rag_count = coll.count()
-                    except:
-                        pass
-            except:
-                pass
+            # Course materials section
+            selected_course = st.session_state.selected_rag_collection
+            selected_internal = get_rag_collection_name(selected_course)
 
-            # Show which collection is selected
-            all_collections = get_all_rag_collections()
-            if all_collections:
-                collection_options = [c['display_name'] for c in all_collections]
-                current_idx = 0
-                for i, name in enumerate(collection_options):
-                    if name == selected_collection:
-                        current_idx = i
-                        break
+            with st.expander("Course Materials", expanded=True):
+                # Course selection
+                all_courses = get_all_courses()
 
-                col_select, col_info = st.columns([2, 1])
-                with col_select:
-                    new_selection = st.selectbox(
-                        "Course materials to use:",
-                        collection_options,
-                        index=current_idx,
-                        key="tab3_collection_selector"
-                    )
-                    if new_selection != selected_collection:
-                        st.session_state.selected_rag_collection = new_selection
-                        st.rerun()
-
-                    # Inline create-new-course flow for Second Scan
-                    with st.expander("➕ Create New Course", expanded=False):
-                        new_name = st.text_input(
-                            "Course name",
-                            placeholder="e.g., PSYC101, Biology 200, History Fall 2024",
-                            key="new_collection_name_tab3"
+                col_course, col_new = st.columns([3, 1])
+                with col_course:
+                    if all_courses:
+                        course_options = [c['display_name'] for c in all_courses]
+                        current_idx = 0
+                        for i, name in enumerate(course_options):
+                            if name == selected_course:
+                                current_idx = i
+                                break
+                        new_selection = st.selectbox(
+                            "Select course:",
+                            course_options,
+                            index=current_idx,
+                            key="tab3_course_selector"
                         )
-                        if st.button("Create Course", type="secondary", disabled=not new_name, key="create_course_tab3"):
+                        if new_selection != selected_course:
+                            st.session_state.selected_rag_collection = new_selection
+                            st.rerun()
+                    else:
+                        st.info("No courses yet. Create one to get started.")
+
+                with col_new:
+                    st.markdown("")  # Spacing
+                    if st.button("+ New", key="new_course_tab3", use_container_width=True):
+                        st.session_state.show_new_course_tab3 = True
+
+                # New course form
+                if st.session_state.get('show_new_course_tab3', False):
+                    new_name = st.text_input("Course name:", placeholder="e.g., PSYC101", key="new_course_name_tab3")
+                    col_create, col_cancel = st.columns(2)
+                    with col_create:
+                        if st.button("Create", key="create_btn_tab3", disabled=not new_name):
                             try:
                                 import chromadb
                                 client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
                                 internal_name = get_rag_collection_name(new_name)
                                 client.get_or_create_collection(name=internal_name)
                                 st.session_state.selected_rag_collection = new_name
-                                st.success(f"✓ Created course: {new_name}")
+                                st.session_state.show_new_course_tab3 = False
                                 st.rerun()
                             except Exception as e:
-                                st.error(f"Error creating course: {e}")
-
-                with col_info:
-                    if rag_count > 0:
-                        st.success(f"✓ {rag_count} chunks")
-                    else:
-                        st.warning("Empty")
-
-            if rag_count == 0:
-                with st.expander("📚 Add Course Materials (Recommended)", expanded=True):
-                    st.markdown(f"""
-                    **No materials in "{selected_collection}"!** For a meaningful second scan, upload your:
-                    - Lecture slides/notes
-                    - Textbook excerpts
-                    - Study guides
-
-                    You can upload them here now, or create/select a different course collection above.
-                    """)
-
-                    uploaded_files = st.file_uploader(
-                        "Drop files here",
-                        type=['txt', 'md', 'pdf'],
-                        accept_multiple_files=True,
-                        key="rag_upload_tab3"
-                    )
-
-                    if uploaded_files:
-                        if st.button("📥 Add Materials", type="primary", key="add_rag_tab3"):
-                            try:
-                                import chromadb
-                                client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-                                coll = client.get_or_create_collection(name=selected_internal_name)
-
-                                total_chunks = 0
-                                for uploaded_file in uploaded_files:
-                                    content = ""
-                                    if uploaded_file.name.endswith('.pdf'):
-                                        try:
-                                            from pypdf import PdfReader
-                                            import io
-                                            reader = PdfReader(io.BytesIO(uploaded_file.read()))
-                                            content = "\n".join([page.extract_text() for page in reader.pages])
-                                        except ImportError:
-                                            st.warning("PDF support requires: pip install pypdf")
-                                            continue
-                                    else:
-                                        content = uploaded_file.read().decode('utf-8', errors='ignore')
-
-                                    if not content.strip():
-                                        continue
-
-                                    # Chunk content
-                                    chunk_size, overlap = 1000, 200
-                                    chunks = []
-                                    start = 0
-                                    while start < len(content):
-                                        chunk = content[start:start + chunk_size]
-                                        if chunk.strip():
-                                            chunks.append(chunk)
-                                        start += chunk_size - overlap
-
-                                    if chunks:
-                                        base_id = f"{selected_collection}_{uploaded_file.name}".replace(" ", "_")[:50]
-                                        coll.add(
-                                            documents=chunks,
-                                            ids=[f"{base_id}_chunk_{i}" for i in range(len(chunks))],
-                                            metadatas=[{"source": uploaded_file.name, "chunk": i} for i in range(len(chunks))]
-                                        )
-                                        total_chunks += len(chunks)
-
-                                if total_chunks > 0:
-                                    st.success(f"✓ Added {total_chunks} chunks to {selected_collection}!")
-                                    st.rerun()
-                            except Exception as e:
                                 st.error(f"Error: {e}")
+                    with col_cancel:
+                        if st.button("Cancel", key="cancel_btn_tab3"):
+                            st.session_state.show_new_course_tab3 = False
+                            st.rerun()
+
+                # Files in current course
+                st.markdown("---")
+                course_files = get_course_files(selected_internal)
+
+                if course_files:
+                    st.markdown(f"**Files in {selected_course}:**")
+                    for filename, segment_count in course_files.items():
+                        col_file, col_del = st.columns([4, 1])
+                        with col_file:
+                            st.text(f"  {filename} ({segment_count} segments)")
+                        with col_del:
+                            if st.button("x", key=f"del_{filename}_tab3", help=f"Remove {filename}"):
+                                deleted = delete_file_from_course(selected_internal, filename)
+                                if deleted > 0:
+                                    st.rerun()
+
+                    # Clear all button
+                    if st.button("Clear All Files", key="clear_all_tab3"):
+                        if clear_course_materials(selected_internal):
+                            st.rerun()
+
+                    # Status
+                    total_segments = sum(course_files.values())
+                    st.caption(f"Ready ({total_segments} text segments)")
+                else:
+                    st.warning(f"No files in {selected_course}. Upload materials for a meaningful second scan.")
+
+                # Upload new files
+                st.markdown("---")
+                uploaded_files = st.file_uploader(
+                    "Upload files (PDF, TXT, MD)",
+                    type=['txt', 'md', 'pdf'],
+                    accept_multiple_files=True,
+                    key="upload_tab3"
+                )
+
+                if uploaded_files:
+                    if st.button("Upload Files", type="primary", key="upload_btn_tab3"):
+                        progress_area = st.empty()
+                        with progress_area.container():
+                            st.markdown("**Processing...**")
+                            progress_text = st.empty()
+                            total = process_uploaded_files(uploaded_files, selected_internal, progress_text)
+                            if total > 0:
+                                progress_text.success(f"Added {len(uploaded_files)} file(s) ({total} segments)")
+                                st.rerun()
 
             # STATE 1: First scan not done yet
             if not st.session_state.no_rag_score:
