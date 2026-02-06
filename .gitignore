@@ -1,0 +1,62 @@
+# Quiz Vulnerability Scanner - Git Ignore
+# =======================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Output directories (generated files)
+output/
+temp_screenshots/
+
+# Old/backup files
+Old Files/
+*.bak
+*.backup
+
+# Debug files
+debug_*.png
+*.log
+
+# Prompt optimization results (large files)
+prompt_comparison_*.json
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# ChromaDB is large but needed for RAG
+# Uncomment if you want to exclude it:
+# chroma_db/
+
+# Environment files (may contain sensitive data)
+.env
+.env.local
+
+# Test results (regenerated)
+no_rag_results.json

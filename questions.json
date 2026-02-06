@@ -1,0 +1,55 @@
+{
+  "quiz_name": "OPS802 Operations Management Quiz - Sample",
+  "questions": [
+    {
+      "id": 1,
+      "text": "Which one of the following statements concerning flowcharts is NOT true?\n\nOptions:\nA. Flowcharts can take many forms.\nB. It is helpful on flowcharts to label each step with process measurements such as cost, capacity, or total elapsed time.\nC. Flowcharts trace the flow of information, customers, equipment, employees, or materials through a process.\nD. The dotted line of visibility separates activities subcontracted from those done in-house.",
+      "correct_answer": "D"
+    },
+    {
+      "id": 2,
+      "text": "Barney took what he liked to call \"the shotgun approach\" to forecasting. Every period he tried a number of different forecasting approaches and at the end of the period he reviewed all of the forecasts to see which was the most accurate. The winner would be used for next period's forecast (but he still made forecasts all possible ways so he could use the system again for the following period). The more formal name for this technique is:\n\nOptions:\nA. combination forecasting.\nB. post-hoc forecasting.\nC. focus forecasting.\nD. shotgun forecasting. He is using the correct terminology.",
+      "correct_answer": "C"
+    },
+    {
+      "id": 3,
+      "text": "In Statistical Process Control, ________ are used to detect defects and determine if the process has deviated from design specifications.\n\nOptions:\nA. Flowcharts\nB. Cause-and-Effect Diagrams\nC. Process Capability Charts\nD. Control Charts",
+      "correct_answer": "D"
+    },
+    {
+      "id": 4,
+      "text": "Which best defines the gross requirements for a component item?\n\nOptions:\nA. the forecasted customer demand for the component\nB. the amount of safety stock needed to buffer against uncertainties\nC. the sum of gross requirements for all parents of the component\nD. the total demand for the component derived from all immediate parents",
+      "correct_answer": "D"
+    },
+    {
+      "id": 5,
+      "text": "Which one of these steps in implementing changes comes first?\n\nOptions:\nA. document the process\nB. evaluate performance\nC. define scope\nD. identify opportunity",
+      "correct_answer": "D"
+    },
+    {
+      "id": 6,
+      "text": "Responsive supply chains should be preferred when:\n\nOptions:\nA. product variety is low.\nB. demand is predictable.\nC. contribution margins are low.\nD. product variety is high.",
+      "correct_answer": "D"
+    },
+    {
+      "id": 7,
+      "text": "An important factor for locating new manufacturing plants is:\n\nOptions:\nA. proximity to customers.\nB. location of competitors.\nC. proximity to markets.\nD. favorable labor climate.",
+      "correct_answer": "D"
+    },
+    {
+      "id": 8,
+      "text": "If a system is well balanced, which one of the following changes usually calls for a larger capacity cushion?\n\nOptions:\nA. higher capital intensity\nB. higher worker flexibility\nC. requests for fast delivery times\nD. higher inventories",
+      "correct_answer": "C"
+    },
+    {
+      "id": 9,
+      "text": "A systematic approach to process analysis includes the step:\n\nOptions:\nA. reengineering.\nB. integration.\nC. order fulfillment.\nD. define scope.",
+      "correct_answer": "D"
+    },
+    {
+      "id": 10,
+      "text": "Which of the following usually is an advantage of on-site expansion, compared to building a new facility?\n\nOptions:\nA. reduced construction time and costs\nB. focused facility\nC. simplified production control\nD. reduced transportation cost",
+      "correct_answer": "A"
+    }
+  ]
+}

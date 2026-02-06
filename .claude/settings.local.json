@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(python3:*)",
+      "Bash(ls:*)",
+      "Bash(# Clean up other generated files rm -f debug_*.png rm -f no_rag_results.json rm -f prompt_comparison_*.json # Show what''s left in root echo \"\"=== Remaining files in root directory ===\"\" ls -la *.json *.html *.md *.py)",
+      "Bash(echo \"=== CLEANED PROJECT STRUCTURE ===\" echo \"\" echo \"Root directory \\(source code\\):\" ls -1 *.py)",
+      "Bash(sort echo \"\" echo \"Documentation:\" ls -1 *.md *.txt)",
+      "Bash(bash -n:*)",
+      "Bash(gh repo view:*)",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}
