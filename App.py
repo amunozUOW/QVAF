@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Quiz Vulnerability Scanner
+Quiz Vulnerability Assessment Framework
 ==========================
 
 A clean interface for testing quiz resistance to AI assistance.
@@ -13,6 +13,7 @@ import warnings
 warnings.filterwarnings("ignore", message="urllib3 v2 only supports OpenSSL")
 
 import streamlit as st
+import streamlit.components.v1 as components
 import json
 import os
 import re
@@ -92,7 +93,7 @@ def find_moodle_page(browser):
 # ============================================
 
 st.set_page_config(
-    page_title="Quiz Vulnerability Scanner",
+    page_title="Quiz Vulnerability Assessment Framework",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -104,6 +105,9 @@ st.markdown("""
     div[data-testid="stMetric"] { background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px; }
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .stTabs [data-baseweb="tab"] { padding: 10px 20px; }
+    /* Hide the Deploy button */
+    .stDeployButton { display: none; }
+    [data-testid="stToolbar"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -799,7 +803,7 @@ def show_onboarding():
 
     # ========== STEP 1: Welcome & System Check ==========
     if step == 1:
-        st.markdown("# Welcome to Quiz Vulnerability Scanner")
+        st.markdown("# Welcome to Quiz Vulnerability Assessment Framework")
         st.markdown("#### Test how resistant your quizzes are to AI-assisted cheating")
 
         st.markdown("---")
@@ -846,7 +850,7 @@ def show_onboarding():
         # Add refresh button if models are missing
         if not text_model_ok:
             st.markdown("---")
-            st.markdown("### Quick Fix")
+            st.markdown("### Installation")
             st.markdown("""
             **To install AI models**, open Terminal and run:
             ```bash
@@ -858,10 +862,10 @@ def show_onboarding():
                 check_ollama.clear()
                 st.rerun()
 
-        # ===== Quick Test Section (available immediately if AI is ready) =====
+        # ===== Test a Single Question Section (available immediately if AI is ready) =====
         if text_model_ok:
             st.markdown("---")
-            st.markdown("### 🧪 Quick Test")
+            st.markdown("### 🧪 Testing a Single Question")
             st.markdown("Try testing a question right now — no browser setup needed.")
 
             with st.expander("Test a Question", expanded=False):
@@ -942,19 +946,17 @@ def show_onboarding():
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("### 📊 Basic Scan")
+            st.markdown("### 📊 Baseline Scan: Quiz without Course Materials")
             st.markdown("""
-            **Quick vulnerability check**
+            Test your quiz against AI using only general knowledge.
 
-            Tests your quiz against AI using only general knowledge.
-
-            - Fast (one scan)
-            - No setup required
-            - Good for quick checks
+            - Baseline vulnerability measurement
+            - AI uses general knowledge only
+            - Results show which questions are vulnerable
             """)
 
             st.markdown("")
-            if st.button("Start Basic Scan", use_container_width=True, key="basic_scan"):
+            if st.button("Start Baseline Scan", use_container_width=True, key="basic_scan"):
                 st.session_state.use_rag_mode = False
                 st.session_state.onboarding_complete = True
                 st.rerun()
@@ -1102,90 +1104,61 @@ def show_onboarding():
                 st.caption("Add materials first")
 
 
-# Check if system is ready (show minimal setup check only)
+# ========================================
+# Helper Functions for RAG Collections
+# ========================================
+
+def get_all_rag_collections():
+    """Get all RAG collections from the database."""
+    collections = []
+    try:
+        import chromadb
+        if os.path.exists(str(CHROMA_DB_PATH)):
+            client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+            for coll in client.list_collections():
+                if coll.name.startswith(RAG_COLLECTION_PREFIX):
+                    display_name = get_display_name(coll.name)
+                    count = coll.count()
+                    collections.append({
+                        'name': coll.name,
+                        'display_name': display_name,
+                        'count': count
+                    })
+    except:
+        pass
+    return collections
+
+def get_collection_files(collection_name):
+    """Get list of source files in a collection."""
+    files = {}
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+        coll = client.get_collection(collection_name)
+        # Get all metadata
+        results = coll.get(include=['metadatas'])
+        for meta in results.get('metadatas', []):
+            source = meta.get('source', 'Unknown')
+            files[source] = files.get(source, 0) + 1
+    except:
+        pass
+    return files
+
+
+# Landing page - skip the old onboarding, go straight to Instructions view
+# System status will be shown in the sidebar
 if not st.session_state.onboarding_complete:
-    # Landing page with two-column layout
-    st.title("Quiz Vulnerability Assessment Framework")
-    st.caption("Test how well your quiz resists AI-assisted cheating")
-    
-    st.markdown("---")
-    
-    # Status checks at the top
-    text_model_ok, vision_ok = check_ollama()
-    chrome_ok, _ = check_chrome()
-    
-    status_col1, status_col2 = st.columns(2)
-    
-    with status_col1:
-        if text_model_ok:
-            st.success("AI Models Ready")
-        else:
-            st.error("AI Models Missing")
-    
-    with status_col2:
-        if chrome_ok:
-            st.success("Browser Connected")
-            st.session_state.chrome_ok = True
-        else:
-            st.info("Browser not detected - will check when you connect")
-    
-    st.markdown("---")
-    
-    # Two-column layout: Left = System Check, Right = Instructions
-    left_col, right_col = st.columns(2)
-    
-    with left_col:
-        st.subheader("System Check")
-        
-        if text_model_ok:
-            st.markdown("Missing AI models installation? Run in terminal:")
-            st.code("ollama pull llama3:8b")
-            st.success("All systems ready!")
-            if st.button("Start", type="primary", use_container_width=True):
-                st.session_state.onboarding_complete = True
-                st.rerun()
-        else:
-            st.warning("Please install AI models before proceeding.")
-            if st.button("Check Again", use_container_width=True):
-                check_ollama.clear()
-                st.rerun()
-    
-    with right_col:
-        st.subheader("Getting Started")
-        
-        st.markdown("""
-        **Choose your assessment path:**
-        
-        **1. Quick Test** (2-3 minutes)
-        - Test a single question instantly
-        - No setup needed
-        - No browser connection required
-        
-        **2. Baseline Scan** (5-15 minutes)
-        - Full quiz assessment without course materials
-        - See baseline AI vulnerability
-        - Requires Moodle browser connection
-        
-        **3. Complete Assessment** (10-30 minutes)
-        - Full quiz with AND without course materials
-        - Detailed comparison showing material impact
-        - Flexible: upload materials before OR after first scan
-        - Requires Moodle browser connection
-        """)
-        
-        st.info("Click **Start** to begin with any of these options.")
-    
-    st.stop()
+    st.session_state.onboarding_complete = True
+    st.rerun()
 
 
 # ============================================
 # MAIN CONTENT
 # ============================================
 
-st.title("Quiz Vulnerability Scanner")
-st.caption("Test how well your quiz resists AI-assisted cheating")
+st.title("Quiz Vulnerability Assessment Framework")
 
-# Track workflow state
+# Track workflow state - use_rag_mode determines which tabs are shown
 workflow = st.session_state.use_rag_mode
 if workflow is None:
     workflow_type = "instructions"  # User hasn't chosen a workflow yet
@@ -1196,6 +1169,9 @@ elif workflow is True:
 else:
     workflow_type = "basic_scan"
     workflow_name = "Baseline Scan (general knowledge only)"
+
+# Check for pending navigation - this happens AFTER use_rag_mode is set but BEFORE tabs are built
+nav_target = st.session_state.get('navigate_to', None)
 
 # Breadcrumb/Status Banner
 st.markdown("---")
@@ -1221,38 +1197,48 @@ with breadcrumb_col2:
 st.markdown("---")
 
 # Build tab list dynamically based on workflow
-# Instructions always first, Test Question always last (for scan workflows)
+# Home always first, Test Question always last (for scan workflows)
 if workflow_type == "instructions":
     # Just choosing workflow - show only these two
-    labels = ["Instructions", "Test Question"]
+    labels = ["Home", "Test Question"]
 elif workflow_type == "basic_scan":
     # Baseline Scan path: Connect required, Results after scan
-    labels = ["Instructions", "Connect", "Scan", "Results", "Test Question"]
+    labels = ["Home", "Connect", "Scan", "Results", "Test Question"]
 elif workflow_type == "full_assessment":
     # Complete Assessment path: Both scans with results
-    labels = ["Instructions", "Connect", "First Scan", "Second Scan", "Results", "Test Question"]
+    labels = ["Home", "Connect", "First Scan", "Second Scan", "Results", "Test Question"]
 else:
-    labels = ["Instructions", "Test Question"]
+    labels = ["Home", "Test Question"]
 
-# Allow navigation buttons on the Instructions page to make a tab appear selected
-nav_target = st.session_state.get('navigate_to', None)
-
+# Allow navigation buttons to make a tab appear selected
+# nav_target was already read above after workflow state was set
+target_tab_index = 0  # Default to first tab
 if nav_target == 'test_question' and 'Test Question' in labels:
-    labels = [l for l in labels if l != 'Test Question']
-    labels.insert(0, 'Test Question')
-elif nav_target == 'first_scan':
-    target = 'First Scan' if workflow == True else 'Scan'
-    if target in labels:
-        labels = [l for l in labels if l != target]
-        labels.insert(0, target)
-elif nav_target == 'second_scan' and 'Second Scan' in labels:
-    labels = [l for l in labels if l != 'Second Scan']
-    labels.insert(0, 'Second Scan')
-elif nav_target == 'results' and 'Results' in labels:
-    labels = [l for l in labels if l != 'Results']
-    labels.insert(0, 'Results')
+    target_tab_index = labels.index('Test Question')
+elif nav_target == 'connect' and 'Connect' in labels:
+    target_tab_index = labels.index('Connect')
 
+# Create tabs
 tab_objs = st.tabs(labels)
+
+# Use JavaScript to click the target tab if navigation was requested
+if nav_target and target_tab_index > 0:
+    js_code = f"""
+    <script>
+        // Wait for tabs to render, then click the target tab
+        function clickTab() {{
+            const tabs = window.parent.document.querySelectorAll('[data-baseweb="tab"]');
+            if (tabs && tabs.length > {target_tab_index}) {{
+                tabs[{target_tab_index}].click();
+            }}
+        }}
+        // Try multiple times to ensure tabs are rendered
+        setTimeout(clickTab, 50);
+        setTimeout(clickTab, 150);
+        setTimeout(clickTab, 300);
+    </script>
+    """
+    components.html(js_code, height=0)
 
 def _get_tab_obj(name):
     try:
@@ -1260,7 +1246,7 @@ def _get_tab_obj(name):
     except Exception:
         return None
 
-tab0 = _get_tab_obj('Instructions')
+tab0 = _get_tab_obj('Home')
 tab1 = _get_tab_obj('Connect')
 tab2 = _get_tab_obj('First Scan') or _get_tab_obj('Scan')
 tab3 = _get_tab_obj('Second Scan')
@@ -1278,14 +1264,14 @@ if 'navigate_to' in st.session_state:
 # ----------------------------------------
 
 with tab0:
-    st.subheader("How to Use the Quiz Vulnerability Scanner")
-    
+    st.subheader("How to Use the Quiz Vulnerability Assessment Framework")
+
     st.markdown("""
     This tool tests how well your quiz resists AI-assisted cheating. Choose one of the workflows below:
     """)
     
-    # Quick Test Tab
-    with st.expander("Quick Test: Testing a single question quickly, no setup needed (2-3 minutes)", expanded=False):
+    # Test Question Tab
+    with st.expander("Testing a single question, no setup needed (2-3 minutes)", expanded=False):
         st.markdown("""
         
         **Steps:**
@@ -1301,7 +1287,7 @@ with tab0:
         - Basic analysis is provided
         """)
         
-        if st.button("Go to Test Question tab", use_container_width=True, key="nav_test_q"):
+        if st.button("Click here to test a single question →", use_container_width=True, key="nav_test_q", type="primary"):
             st.session_state.navigate_to = 'test_question'
             # Test question does not require Moodle/scan mode
             st.session_state.use_rag_mode = st.session_state.use_rag_mode
@@ -1330,9 +1316,9 @@ with tab0:
         - Takes 5-15 minutes depending on quiz length and model speed
         """)
         
-        if st.button("Start Baseline Scan", use_container_width=True, key="nav_baseline"):
-            st.session_state.navigate_to = 'first_scan'
+        if st.button("Click here to start Baseline Scan →", use_container_width=True, key="nav_baseline", type="primary"):
             st.session_state.use_rag_mode = False
+            st.session_state.navigate_to = 'connect'
             st.rerun()
     
     # Full Scan Tab
@@ -1369,9 +1355,9 @@ with tab0:
         - Takes 10-30 minutes depending on quiz length and course materials
         """)
         
-        if st.button("Start Complete Assessment", use_container_width=True, key="nav_full"):
-            st.session_state.navigate_to = 'first_scan'
+        if st.button("Click here to start Complete Assessment →", use_container_width=True, key="nav_full", type="primary"):
             st.session_state.use_rag_mode = True
+            st.session_state.navigate_to = 'connect'
             st.rerun()
         
         # Settings & Configuration as sub-expander
@@ -1388,10 +1374,6 @@ with tab0:
         - **Before First Scan** in the **First Scan** tab
         - **Before Second Scan** in the **Second Scan** tab
         """)
-    
-    st.markdown("---")
-    
-    st.info("**Tip:** Start with Quick Test to verify everything is working, then move to a full scan for detailed insights.")
 
 
 
@@ -1399,100 +1381,416 @@ with tab0:
 # TAB 1: CONNECT
 # ----------------------------------------
 
-with tab1:
-    # Show different content based on connection state
-    if st.session_state.chrome_ok:
-        # Already connected - show success and guide to next step
-        st.success("✓ Connected to Chrome")
+if tab1 is not None:
+    with tab1:
+        st.subheader("Connect to Browser")
 
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.markdown("**You're ready to scan!** Navigate to your quiz in Chrome and start an attempt.")
-            st.caption("Make sure the first question is visible before starting the scan.")
-        with col2:
-            if st.button("🔄 Reconnect", use_container_width=True):
-                st.session_state.chrome_ok = False
+        # Show instructions based on workflow mode
+        if st.session_state.use_rag_mode == True:
+            # Full Assessment mode
+            with st.expander("📋 Instructions", expanded=True):
+                st.markdown("""
+                **Complete Assessment Steps:**
+                1. Open your Moodle quiz in Chrome and start an attempt (or preview)
+                2. Make sure the first question is visible
+                3. Click **Connect to Browser** below
+                4. Once connected, go to **First Scan** tab to start the baseline scan
+                5. After first scan, go to **Second Scan** tab to test with course materials
+                6. View **Results** for detailed comparison analysis
+                """)
+        elif st.session_state.use_rag_mode == False:
+            # Baseline Scan mode
+            with st.expander("📋 Instructions", expanded=True):
+                st.markdown("""
+                **Baseline Scan Steps:**
+                1. Open your Moodle quiz in Chrome and start an attempt (or preview)
+                2. Make sure the first question is visible
+                3. Click **Connect to Browser** below
+                4. Once connected, go to **Scan** tab to start the scan
+                5. View **Results** and **Generate Report** for analysis
+                """)
+
+        # Show different content based on connection state
+        if st.session_state.chrome_ok:
+            # Already connected - show success and guide to next step
+            st.success("✓ Connected to Chrome")
+
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.markdown("**You're ready to scan!** Navigate to your quiz in Chrome and start an attempt.")
+                st.caption("Make sure the first question is visible before starting the scan.")
+            with col2:
+                if st.button("🔄 Reconnect", use_container_width=True):
+                    st.session_state.chrome_ok = False
+                    st.rerun()
+
+            st.markdown("---")
+
+            # Guide user to next step
+            st.markdown("### Next Step")
+            next_tab = "**Scan**" if not st.session_state.use_rag_mode else "**First Scan**"
+            st.info(f"When your quiz is ready in Chrome, go to the {next_tab} tab to begin.")
+
+        else:
+            # Not connected - show setup
+            left, right = st.columns([3, 2])
+
+            with left:
+                st.subheader("Connect to Your Quiz")
+
+                st.markdown("""
+                The scanner reads quiz questions directly from Chrome and fills in AI-generated answers.
+                You control when to submit.
+                """)
+
+                st.markdown("")
+
+                if st.button("🔌 Connect to Browser", type="primary", use_container_width=True):
+                    with st.spinner("Connecting..."):
+                        ok, url = check_chrome()
+
+                    if ok:
+                        st.session_state.chrome_ok = True
+                        log("Connected to browser", "🌐")
+                        log(f"Page: {url[:50]}...", "📍")
+                        st.rerun()
+                    else:
+                        st.error("Could not connect. See troubleshooting below.")
+
+                with st.expander("Troubleshooting"):
+                    st.markdown("""
+                    **If "Start Scanner" was used to launch the app**, Chrome should connect automatically.
+                    Try clicking Connect again.
+
+                    **Manual setup (if Chrome wasn't started by the app):**
+
+                    macOS:
+                    ```
+                    /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
+                    ```
+
+                    Windows:
+                    ```
+                    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir=%TEMP%\\chrome-debug
+                    ```
+
+                    Then navigate to your quiz and start an attempt.
+                    """)
+
+            # System Status (moved here from the initial landing page)
+            st.markdown("---")
+            st.subheader("System Status")
+            text_model_ok, vision_ok = check_ollama()
+            chrome_ok, chrome_msg = check_chrome()
+
+            s_col1, s_col2 = st.columns(2)
+            with s_col1:
+                if text_model_ok:
+                    st.success("AI models ready")
+                else:
+                    st.error("AI models missing")
+                    st.caption("Install with: ollama pull llama3:8b")
+            with s_col2:
+                if chrome_ok:
+                    st.success("Browser detected")
+                    st.caption(chrome_msg[:200] if chrome_msg else "")
+                    st.session_state.chrome_ok = True
+                else:
+                    st.info("Browser not connected")
+                    if chrome_msg:
+                        st.caption("Detected error: " + chrome_msg)
+
+            if st.button("Refresh System Status"):
+                check_ollama.clear()
                 st.rerun()
 
-        st.markdown("---")
+            with right:
+                st.subheader("Activity")
+                with st.container(height=300):
+                    show_activity()
 
-        # Guide user to next step
-        st.markdown("### Next Step")
-        next_tab = "**Scan**" if not st.session_state.use_rag_mode else "**First Scan**"
-        st.info(f"When your quiz is ready in Chrome, go to the {next_tab} tab to begin.")
 
-    else:
-        # Not connected - show setup
+    # ----------------------------------------
+# ----------------------------------------
+# TAB 2: FIRST SCAN
+# ----------------------------------------
+
+if tab2 is not None:
+    with tab2:
         left, right = st.columns([3, 2])
 
         with left:
-            st.subheader("Connect to Your Quiz")
+            # Dynamic title based on scan mode
+            if st.session_state.use_rag_mode:
+                st.subheader("First Scan: Baseline AI")
+                scan_description = "This scan uses only general AI knowledge—no course materials."
 
-            st.markdown("""
-            The scanner reads quiz questions directly from Chrome and fills in AI-generated answers.
-            You control when to submit.
-            """)
+                # Instructions for Full Assessment mode
+                with st.expander("📋 Instructions", expanded=True):
+                    st.markdown("""
+                    **Steps:**
+                    1. Open your Moodle quiz in Chrome and start an attempt (or start preview)
+                    2. Make sure the first question is visible
+                    3. Go to **Connect** tab and click "Connect to Browser"
+                    4. Click **Start First Scan** below
+                    5. When complete, submit the quiz in Moodle and navigate to the results page
+                    6. Click **Collect Results** below
+                    7. Then proceed to **Second Scan** to test with course materials
 
-            st.markdown("")
+                    **What happens:** AI answers using only general knowledge (no course materials)
+                    """)
+            else:
+                st.subheader("Scan: AI Vulnerability Test")
+                scan_description = "This scan tests how well AI can answer your quiz using general knowledge."
 
-            if st.button("🔌 Connect to Browser", type="primary", use_container_width=True):
-                with st.spinner("Connecting..."):
-                    ok, url = check_chrome()
+                # Instructions for Baseline Scan mode
+                with st.expander("📋 Instructions", expanded=True):
+                    st.markdown("""
+                    **Steps:**
+                    1. Open your Moodle quiz in Chrome and start an attempt (or start preview)
+                    2. Make sure the first question is visible
+                    3. Go to **Connect** tab and click "Connect to Browser"
+                    4. Click **Start Scan** below
+                    5. When complete, submit the quiz in Moodle and navigate to the results page
+                    6. Click **Collect Results** below
+                    7. Click **Generate Report** for detailed analysis
 
-                if ok:
-                    st.session_state.chrome_ok = True
-                    log("Connected to browser", "🌐")
-                    log(f"Page: {url[:50]}...", "📍")
-                    st.rerun()
+                    **What happens:** AI answers using only general knowledge—this gives you a baseline vulnerability measurement
+                    """)
+
+            # STATE 1: Not connected
+            if not st.session_state.chrome_ok:
+                st.warning("**Connect to Chrome first** to start scanning.")
+                st.caption("Go to the Connect tab to set up the browser connection.")
+
+            # STATE 2: Scan complete with results
+            elif st.session_state.no_rag_score:
+                score = st.session_state.no_rag_score
+
+                st.success("✓ Scan complete")
+
+                col1, col2, col3 = st.columns(3)
+                col1.metric("AI Score", f"{score['percentage']}%")
+                col2.metric("Correct", f"{score['correct']}/{score['total']}")
+                avg_conf = score.get('avg_confidence', 0)
+                col3.metric("Avg Confidence", f"{avg_conf}%")
+
+                if score['percentage'] >= 50:
+                    st.warning("⚠️ AI can pass with general knowledge alone.")
                 else:
-                    st.error("Could not connect. See troubleshooting below.")
+                    st.success("✓ AI struggles without course materials.")
 
-            with st.expander("Troubleshooting"):
+                st.markdown("---")
+
+                # Auto-navigate based on workflow
+                if st.session_state.use_rag_mode:
+                    # Full assessment mode: guide to Second Scan
+                    if not st.session_state.with_rag_score:
+                        st.info("Next: Go to **Second Scan** tab to test with course materials.")
+                        st.markdown("")
+                        if st.button("Continue to Second Scan", type="primary", use_container_width=True):
+                            st.session_state.navigate_to = 'second_scan'
+                            st.rerun()
+                    else:
+                        # Both scans done
+                        st.success("Both scans complete! Go to **Results** for full analysis.")
+                        st.markdown("")
+                        if st.button("Generate Report", type="primary", use_container_width=True):
+                            st.session_state.navigate_to = 'results'
+                            st.rerun()
+                else:
+                    # Basic scan mode: go straight to Results
+                    st.success("Ready to generate your analysis report.")
+                    st.markdown("")
+                    if st.button("View Results", type="primary", use_container_width=True):
+                        st.session_state.navigate_to = 'results'
+                        st.rerun()
+
+            # STATE 3: Answers filled, waiting for submission
+            elif st.session_state.no_rag_file:
+                st.success("✓ AI has filled in the answers")
+
                 st.markdown("""
-                **If "Start Scanner" was used to launch the app**, Chrome should connect automatically.
-                Try clicking Connect again.
-
-                **Manual setup (if Chrome wasn't started by the app):**
-
-                macOS:
-                ```
-                /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
-                ```
-
-                Windows:
-                ```
-                "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir=%TEMP%\\chrome-debug
-                ```
-
-                Then navigate to your quiz and start an attempt.
+                **Now in Chrome:**
+                1. Review the answers if you'd like
+                2. Click **"Finish attempt"**
+                3. Click **"Submit all and finish"**
                 """)
 
-        # System Status (moved here from the initial landing page)
-        st.markdown("---")
-        st.subheader("System Status")
-        text_model_ok, vision_ok = check_ollama()
-        chrome_ok, chrome_msg = check_chrome()
+                st.markdown("---")
 
-        s_col1, s_col2 = st.columns(2)
-        with s_col1:
-            if text_model_ok:
-                st.success("AI models ready")
-            else:
-                st.error("AI models missing")
-                st.caption("Install with: ollama pull llama3:8b")
-        with s_col2:
-            if chrome_ok:
-                st.success("Browser detected")
-                st.caption(chrome_msg[:200] if chrome_msg else "")
-                st.session_state.chrome_ok = True
-            else:
-                st.info("Browser not connected")
-                if chrome_msg:
-                    st.caption("Detected error: " + chrome_msg)
+                st.markdown("**When you see the results page in Chrome:**")
 
-        if st.button("Refresh System Status"):
-            check_ollama.clear()
-            st.experimental_rerun()
+                if st.button("📥 Collect Results", key="get1", type="primary", use_container_width=True):
+                    with st.spinner("Reading results from Chrome..."):
+                        results = scrape_results()
+                        score = save_results(st.session_state.no_rag_file, results)
+                        st.session_state.no_rag_score = score
+                    st.rerun()
+
+            # STATE 4: Ready to start scan
+            else:
+                st.markdown(f"**{scan_description}**")
+
+                st.markdown("---")
+
+                # Course materials upload (Option A - before first scan)
+                if st.session_state.use_rag_mode:
+                    with st.expander("📚 Upload Course Materials (Optional for Option A)", expanded=False):
+                        st.markdown("""
+                        **Option A: Upload Before First Scan**
+                    
+                        You can upload course materials now, and they'll be available for the Second Scan.
+                        Materials help show how AI performance changes when it has access to your course content.
+                    
+                        Upload your:
+                        - Lecture slides/notes
+                        - Textbook excerpts
+                        - Study guides
+                        - Required readings
+                        """)
+                    
+                        # Allow selecting an existing RAG collection or upload to the current selection
+                        all_collections = get_all_rag_collections()
+                        if all_collections:
+                            collection_options = [c['display_name'] for c in all_collections]
+                            # Find index of currently selected
+                            current_idx = 0
+                            for i, name in enumerate(collection_options):
+                                if name == st.session_state.selected_rag_collection:
+                                    current_idx = i
+                                    break
+
+                            col_sel, col_info = st.columns([2, 1])
+                            with col_sel:
+                                new_selection = st.selectbox(
+                                    "Use existing course materials (or select to upload to):",
+                                    collection_options,
+                                    index=current_idx,
+                                    key="tab2_collection_selector"
+                                )
+                                if new_selection != st.session_state.selected_rag_collection:
+                                    st.session_state.selected_rag_collection = new_selection
+                                    st.rerun()
+
+                                # Inline create-new-course flow
+                                with st.expander("➕ Create New Course", expanded=False):
+                                    new_name = st.text_input(
+                                        "Course name",
+                                        placeholder="e.g., PSYC101, Biology 200, History Fall 2024",
+                                        key="new_collection_name_tab2"
+                                    )
+                                    if st.button("Create Course", type="secondary", disabled=not new_name, key="create_course_tab2"):
+                                        try:
+                                            import chromadb
+                                            client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+                                            internal_name = get_rag_collection_name(new_name)
+                                            client.get_or_create_collection(name=internal_name)
+                                            st.session_state.selected_rag_collection = new_name
+                                            st.success(f"✓ Created course: {new_name}")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Error creating course: {e}")
+
+                            with col_info:
+                                # show chunk count if available
+                                try:
+                                    import chromadb
+                                    client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+                                    coll = client.get_collection(get_rag_collection_name(st.session_state.selected_rag_collection))
+                                    cnt = coll.count()
+                                    if cnt > 0:
+                                        st.success(f"✓ {cnt} chunks")
+                                    else:
+                                        st.warning("Empty")
+                                except Exception:
+                                    pass
+                        else:
+                            st.info("No existing course collections found — you can upload to create one.")
+
+                        selected_collection = st.session_state.selected_rag_collection
+                        selected_internal_name = get_rag_collection_name(selected_collection)
+
+                        uploaded_files = st.file_uploader(
+                            "Drop course materials here (TXT, MD, or PDF)",
+                            type=['txt', 'md', 'pdf'],
+                            accept_multiple_files=True,
+                            key="rag_upload_tab2_before"
+                        )
+
+                        if uploaded_files:
+                            if st.button("📥 Add Materials", type="secondary", key="add_rag_tab2_before"):
+                                try:
+                                    import chromadb
+                                    client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+                                    coll = client.get_or_create_collection(name=selected_internal_name)
+
+                                    total_chunks = 0
+                                    for uploaded_file in uploaded_files:
+                                        content = ""
+                                        if uploaded_file.name.endswith('.pdf'):
+                                            try:
+                                                from pypdf import PdfReader
+                                                import io
+                                                reader = PdfReader(io.BytesIO(uploaded_file.read()))
+                                                content = "\n".join([page.extract_text() for page in reader.pages])
+                                            except ImportError:
+                                                st.warning("PDF support requires: pip install pypdf")
+                                                continue
+                                        else:
+                                            content = uploaded_file.read().decode('utf-8', errors='ignore')
+
+                                        if not content.strip():
+                                            continue
+
+                                        # Chunk content
+                                        chunk_size, overlap = 1000, 200
+                                        chunks = []
+                                        start = 0
+                                        while start < len(content):
+                                            chunk = content[start:start + chunk_size]
+                                            if chunk.strip():
+                                                chunks.append(chunk)
+                                            start += chunk_size - overlap
+
+                                        if chunks:
+                                            base_id = f"{selected_collection}_{uploaded_file.name}".replace(" ", "_")[:50]
+                                            coll.add(
+                                                documents=chunks,
+                                                ids=[f"{base_id}_chunk_{i}" for i in range(len(chunks))],
+                                                metadatas=[{"source": uploaded_file.name, "chunk": i} for i in range(len(chunks))]
+                                            )
+                                            total_chunks += len(chunks)
+
+                                    if total_chunks > 0:
+                                        st.success(f"✓ Added {total_chunks} chunks to {selected_collection}!")
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
+
+                st.markdown("**Before you start:**")
+                st.markdown("• Make sure your quiz is open in Chrome")
+                st.markdown("• Navigate to the **first question**")
+                st.markdown("• The scanner will fill in answers automatically")
+
+                st.markdown("")
+
+                # Disable button while scanning
+                scan_disabled = st.session_state.is_scanning
+                button_label = "⏳ Scanning..." if scan_disabled else "▶️ Start Scan"
+
+                if st.button(button_label, type="primary", use_container_width=True, disabled=scan_disabled):
+                    st.session_state.is_scanning = True
+                    clear_log()
+                    progress_placeholder = st.empty()
+
+                    try:
+                        output, q_count = run_quiz(use_rag=False)
+                        st.session_state.no_rag_file = output
+                        progress_placeholder.success(f"✓ Scan complete! {q_count} questions answered")
+                    finally:
+                        st.session_state.is_scanning = False
+                    st.rerun()
 
         with right:
             st.subheader("Activity")
@@ -1500,206 +1798,8 @@ with tab1:
                 show_activity()
 
 
-# ----------------------------------------
-# TAB 2: FIRST SCAN
-# ----------------------------------------
-
-with tab2:
-    left, right = st.columns([3, 2])
-
-    with left:
-        # Dynamic title based on scan mode
-        if st.session_state.use_rag_mode:
-            st.subheader("First Scan: Baseline AI")
-            scan_description = "This scan uses only general AI knowledge—no course materials."
-        else:
-            st.subheader("Scan: AI Vulnerability Test")
-            scan_description = "This scan tests how well AI can answer your quiz using general knowledge."
-
-        # STATE 1: Not connected
-        if not st.session_state.chrome_ok:
-            st.warning("**Connect to Chrome first** to start scanning.")
-            st.caption("Go to the Connect tab to set up the browser connection.")
-
-        # STATE 2: Scan complete with results
-        elif st.session_state.no_rag_score:
-            score = st.session_state.no_rag_score
-
-            st.success("✓ Scan complete")
-
-            col1, col2, col3 = st.columns(3)
-            col1.metric("AI Score", f"{score['percentage']}%")
-            col2.metric("Correct", f"{score['correct']}/{score['total']}")
-            avg_conf = score.get('avg_confidence', 0)
-            col3.metric("Avg Confidence", f"{avg_conf}%")
-
-            if score['percentage'] >= 50:
-                st.warning("⚠️ AI can pass with general knowledge alone.")
-            else:
-                st.success("✓ AI struggles without course materials.")
-
-            st.markdown("---")
-
-            # Auto-navigate based on workflow
-            if st.session_state.use_rag_mode:
-                # Full assessment mode: guide to Second Scan
-                if not st.session_state.with_rag_score:
-                    st.info("Next: Go to **Second Scan** tab to test with course materials.")
-                    st.markdown("")
-                    if st.button("Continue to Second Scan", type="primary", use_container_width=True):
-                        st.session_state.navigate_to = 'second_scan'
-                        st.rerun()
-                else:
-                    # Both scans done
-                    st.success("Both scans complete! Go to **Results** for full analysis.")
-                    st.markdown("")
-                    if st.button("Generate Report", type="primary", use_container_width=True):
-                        st.session_state.navigate_to = 'results'
-                        st.rerun()
-            else:
-                # Basic scan mode: go straight to Results
-                st.success("Ready to generate your analysis report.")
-                st.markdown("")
-                if st.button("View Results", type="primary", use_container_width=True):
-                    st.session_state.navigate_to = 'results'
-                    st.rerun()
-
-        # STATE 3: Answers filled, waiting for submission
-        elif st.session_state.no_rag_file:
-            st.success("✓ AI has filled in the answers")
-
-            st.markdown("""
-            **Now in Chrome:**
-            1. Review the answers if you'd like
-            2. Click **"Finish attempt"**
-            3. Click **"Submit all and finish"**
-            """)
-
-            st.markdown("---")
-
-            st.markdown("**When you see the results page in Chrome:**")
-
-            if st.button("📥 Collect Results", key="get1", type="primary", use_container_width=True):
-                with st.spinner("Reading results from Chrome..."):
-                    results = scrape_results()
-                    score = save_results(st.session_state.no_rag_file, results)
-                    st.session_state.no_rag_score = score
-                st.rerun()
-
-        # STATE 4: Ready to start scan
-        else:
-            st.markdown(f"**{scan_description}**")
-
-            st.markdown("---")
-
-            # Course materials upload (Option A - before first scan)
-            if st.session_state.use_rag_mode:
-                with st.expander("📚 Upload Course Materials (Optional for Option A)", expanded=False):
-                    st.markdown("""
-                    **Option A: Upload Before First Scan**
-                    
-                    You can upload course materials now, and they'll be available for the Second Scan.
-                    Materials help show how AI performance changes when it has access to your course content.
-                    
-                    Upload your:
-                    - Lecture slides/notes
-                    - Textbook excerpts
-                    - Study guides
-                    - Required readings
-                    """)
-                    
-                    selected_collection = st.session_state.selected_rag_collection
-                    selected_internal_name = get_rag_collection_name(selected_collection)
-                    
-                    uploaded_files = st.file_uploader(
-                        "Drop course materials here (TXT, MD, or PDF)",
-                        type=['txt', 'md', 'pdf'],
-                        accept_multiple_files=True,
-                        key="rag_upload_tab2_before"
-                    )
-
-                    if uploaded_files:
-                        if st.button("📥 Add Materials", type="secondary", key="add_rag_tab2_before"):
-                            try:
-                                import chromadb
-                                client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-                                coll = client.get_or_create_collection(name=selected_internal_name)
-
-                                total_chunks = 0
-                                for uploaded_file in uploaded_files:
-                                    content = ""
-                                    if uploaded_file.name.endswith('.pdf'):
-                                        try:
-                                            from pypdf import PdfReader
-                                            import io
-                                            reader = PdfReader(io.BytesIO(uploaded_file.read()))
-                                            content = "\n".join([page.extract_text() for page in reader.pages])
-                                        except ImportError:
-                                            st.warning("PDF support requires: pip install pypdf")
-                                            continue
-                                    else:
-                                        content = uploaded_file.read().decode('utf-8', errors='ignore')
-
-                                    if not content.strip():
-                                        continue
-
-                                    # Chunk content
-                                    chunk_size, overlap = 1000, 200
-                                    chunks = []
-                                    start = 0
-                                    while start < len(content):
-                                        chunk = content[start:start + chunk_size]
-                                        if chunk.strip():
-                                            chunks.append(chunk)
-                                        start += chunk_size - overlap
-
-                                    if chunks:
-                                        base_id = f"{selected_collection}_{uploaded_file.name}".replace(" ", "_")[:50]
-                                        coll.add(
-                                            documents=chunks,
-                                            ids=[f"{base_id}_chunk_{i}" for i in range(len(chunks))],
-                                            metadatas=[{"source": uploaded_file.name, "chunk": i} for i in range(len(chunks))]
-                                        )
-                                        total_chunks += len(chunks)
-
-                                if total_chunks > 0:
-                                    st.success(f"✓ Added {total_chunks} chunks to {selected_collection}!")
-                                    st.rerun()
-                            except Exception as e:
-                                st.error(f"Error: {e}")
-
-            st.markdown("**Before you start:**")
-            st.markdown("• Make sure your quiz is open in Chrome")
-            st.markdown("• Navigate to the **first question**")
-            st.markdown("• The scanner will fill in answers automatically")
-
-            st.markdown("")
-
-            # Disable button while scanning
-            scan_disabled = st.session_state.is_scanning
-            button_label = "⏳ Scanning..." if scan_disabled else "▶️ Start Scan"
-
-            if st.button(button_label, type="primary", use_container_width=True, disabled=scan_disabled):
-                st.session_state.is_scanning = True
-                clear_log()
-                progress_placeholder = st.empty()
-
-                try:
-                    output, q_count = run_quiz(use_rag=False)
-                    st.session_state.no_rag_file = output
-                    progress_placeholder.success(f"✓ Scan complete! {q_count} questions answered")
-                finally:
-                    st.session_state.is_scanning = False
-                st.rerun()
-
-    with right:
-        st.subheader("Activity")
-        with st.container(height=300):
-            show_activity()
-
-
-# ----------------------------------------
-# TAB 3: SECOND SCAN (only shown in full scan mode)
+    # ----------------------------------------
+    # TAB 3: SECOND SCAN (only shown in full scan mode)
 # ----------------------------------------
 
 if tab3 is not None:
@@ -1709,10 +1809,20 @@ if tab3 is not None:
         with left:
             st.subheader("Second Scan: AI + Course Materials")
 
-            st.info("""
-            **What this tests:** Can someone pass by uploading your lecture notes to an AI?
-            This scan gives the AI access to course materials via RAG.
-            """)
+            # Instructions for Second Scan
+            with st.expander("📋 Instructions", expanded=True):
+                st.markdown("""
+                **Steps:**
+                1. Start a **new quiz attempt/preview** in Moodle (make sure the first question is visible)
+                2. Upload course materials below if you haven't already
+                3. Click **Start Second Scan**
+                4. When complete, submit the quiz in Moodle and navigate to the results page
+                5. Click **Collect Results** below
+                6. Go to **Results** tab and click **Generate Report** for detailed analysis
+
+                **What this tests:** Can someone pass by uploading your lecture notes to an AI?
+                This scan gives the AI access to your course materials via RAG.
+                """)
 
             # Check RAG status for the SELECTED collection
             selected_collection = st.session_state.selected_rag_collection
@@ -1751,6 +1861,25 @@ if tab3 is not None:
                     if new_selection != selected_collection:
                         st.session_state.selected_rag_collection = new_selection
                         st.rerun()
+
+                    # Inline create-new-course flow for Second Scan
+                    with st.expander("➕ Create New Course", expanded=False):
+                        new_name = st.text_input(
+                            "Course name",
+                            placeholder="e.g., PSYC101, Biology 200, History Fall 2024",
+                            key="new_collection_name_tab3"
+                        )
+                        if st.button("Create Course", type="secondary", disabled=not new_name, key="create_course_tab3"):
+                            try:
+                                import chromadb
+                                client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+                                internal_name = get_rag_collection_name(new_name)
+                                client.get_or_create_collection(name=internal_name)
+                                st.session_state.selected_rag_collection = new_name
+                                st.success(f"✓ Created course: {new_name}")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error creating course: {e}")
 
                 with col_info:
                     if rag_count > 0:
@@ -1926,267 +2055,268 @@ if tab3 is not None:
 # TAB 4: RESULTS
 # ----------------------------------------
 
-with tab4:
+if tab4 is not None:
+    with tab4:
     # Determine what results we have based on scan mode
-    is_full_scan_mode = st.session_state.use_rag_mode
-    has_baseline = st.session_state.no_rag_score is not None
-    has_enhanced = st.session_state.with_rag_score is not None
+        is_full_scan_mode = st.session_state.use_rag_mode
+        has_baseline = st.session_state.no_rag_score is not None
+        has_enhanced = st.session_state.with_rag_score is not None
 
-    # Check if we have enough data to show results
-    if is_full_scan_mode and not has_enhanced:
-        st.subheader("Results")
-        if not has_baseline:
-            st.info("Complete both scans to see your results here.")
-            st.caption("Start with the **First Scan** tab.")
-        else:
-            st.info("Complete the second scan to see your full comparison results.")
-            st.caption("Go to the **Second Scan** tab to continue.")
-    elif not is_full_scan_mode and not has_baseline:
-        st.subheader("Results")
-        st.info("Complete the scan to see your results here.")
-        st.caption("Go to the **Scan** tab to test your quiz.")
-    else:
-        # We have results to show
-        baseline = st.session_state.no_rag_score
-
-        # Summary metrics - different display for single vs full scan
-        st.subheader("Summary")
-
-        if is_full_scan_mode and has_enhanced:
-            # Full scan mode - show comparison
-            enhanced = st.session_state.with_rag_score
-            best = max(baseline['percentage'], enhanced['percentage'])
-
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Baseline Score", f"{baseline['percentage']}%", help="AI with general knowledge only")
-            col2.metric("Enhanced Score", f"{enhanced['percentage']}%", help="AI with course materials")
-            col3.metric("Materials Effect", f"{enhanced['percentage'] - baseline['percentage']:+.0f}%")
-
-            if best < 40:
-                col4.metric("Risk Level", "LOW", help="AI struggles with this quiz")
-            elif best < 60:
-                col4.metric("Risk Level", "MEDIUM", help="AI can nearly pass")
+        # Check if we have enough data to show results
+        if is_full_scan_mode and not has_enhanced:
+            st.subheader("Results")
+            if not has_baseline:
+                st.info("Complete both scans to see your results here.")
+                st.caption("Start with the **First Scan** tab.")
             else:
-                col4.metric("Risk Level", "HIGH", help="AI can pass this quiz")
+                st.info("Complete the second scan to see your full comparison results.")
+                st.caption("Go to the **Second Scan** tab to continue.")
+        elif not is_full_scan_mode and not has_baseline:
+            st.subheader("Results")
+            st.info("Complete the scan to see your results here.")
+            st.caption("Go to the **Scan** tab to test your quiz.")
         else:
-            # Basic scan mode - show single result
-            score = baseline['percentage']
+            # We have results to show
+            baseline = st.session_state.no_rag_score
 
-            col1, col2, col3 = st.columns(3)
-            col1.metric("AI Score", f"{score}%", help="AI with general knowledge only")
-            col2.metric("Correct Answers", f"{baseline['correct']}/{baseline['total']}")
+            # Summary metrics - different display for single vs full scan
+            st.subheader("Summary")
 
-            if score < 40:
-                col3.metric("Risk Level", "LOW", help="AI struggles with this quiz")
-            elif score < 60:
-                col3.metric("Risk Level", "MEDIUM", help="AI can nearly pass")
-            else:
-                col3.metric("Risk Level", "HIGH", help="AI can pass this quiz")
+            if is_full_scan_mode and has_enhanced:
+                # Full scan mode - show comparison
+                enhanced = st.session_state.with_rag_score
+                best = max(baseline['percentage'], enhanced['percentage'])
 
-            st.info("""
-            **Basic Scan Complete!** This shows how well AI performs with general knowledge only.
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Baseline Score", f"{baseline['percentage']}%", help="AI with general knowledge only")
+                col2.metric("Enhanced Score", f"{enhanced['percentage']}%", help="AI with course materials")
+                col3.metric("Materials Effect", f"{enhanced['percentage'] - baseline['percentage']:+.0f}%")
 
-            For a more comprehensive analysis that shows how course materials affect AI performance,
-            go to the **Instructions** tab and choose **Complete Assessment**.
-            """)
-        
-        st.divider()
-        
-        # Report generation or display
-        if st.session_state.report_file:
-            # Dashboard is in DASHBOARDS_DIR with base name
-            report_path = Path(st.session_state.report_file)
-            base_name = report_path.stem.replace('_analysis_report', '').replace('_vulnerability_report', '')
-
-            # Try multiple possible locations for the dashboard
-            possible_paths = [
-                DASHBOARDS_DIR / f"{base_name}_dashboard.html",
-                Path("./output/dashboards") / f"{base_name}_dashboard.html",
-                report_path.parent / f"{base_name}_dashboard.html",
-                Path(".") / f"{base_name}_dashboard.html",
-            ]
-
-            dashboard = None
-            for path in possible_paths:
-                if path.exists():
-                    dashboard = path
-                    break
-
-            if dashboard and dashboard.exists():
-                st.subheader("Detailed Analysis")
-                
-                with open(dashboard) as f:
-                    html = f.read()
-                
-                st.components.v1.html(html, height=650, scrolling=True)
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.download_button(
-                        "📥 Download Dashboard (HTML)",
-                        html,
-                        "quiz_vulnerability_dashboard.html",
-                        "text/html",
-                        use_container_width=True
-                    )
-                with col2:
-                    with open(st.session_state.report_file) as f:
-                        report_data = f.read()
-                    st.download_button(
-                        "📥 Download Report (JSON)",
-                        report_data,
-                        "vulnerability_report.json", 
-                        "application/json",
-                        use_container_width=True
-                    )
-            else:
-                st.error("Dashboard file not found. Try generating the report again.")
-                with st.expander("Debug info"):
-                    st.write(f"Report file: {st.session_state.report_file}")
-                    st.write(f"Base name: {base_name}")
-                    st.write("Searched paths:")
-                    for path in possible_paths:
-                        st.write(f"  - {path} (exists: {path.exists()})")
-
-        else:
-            left, right = st.columns([3, 2])
-
-            with left:
-                st.subheader("Generate Analysis Report")
-
-                st.markdown("**Your scan is complete.** Generate a detailed report to:")
-
-                if is_full_scan_mode:
-                    st.markdown("""
-                    - Classify each question by cognitive type
-                    - Compare baseline vs enhanced AI performance
-                    - Identify the most vulnerable questions
-                    - Create an interactive dashboard
-                    """)
+                if best < 40:
+                    col4.metric("Risk Level", "LOW", help="AI struggles with this quiz")
+                elif best < 60:
+                    col4.metric("Risk Level", "MEDIUM", help="AI can nearly pass")
                 else:
-                    st.markdown("""
-                    - Classify each question by cognitive type
-                    - Identify the most vulnerable questions
-                    - Create an interactive dashboard
-                    """)
+                    col4.metric("Risk Level", "HIGH", help="AI can pass this quiz")
+            else:
+                # Basic scan mode - show single result
+                score = baseline['percentage']
 
-                st.markdown("")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("AI Score", f"{score}%", help="AI with general knowledge only")
+                col2.metric("Correct Answers", f"{baseline['correct']}/{baseline['total']}")
 
-                if st.button("🔬 Generate Report", type="primary", use_container_width=True):
-                    clear_log()
-                    import subprocess
+                if score < 40:
+                    col3.metric("Risk Level", "LOW", help="AI struggles with this quiz")
+                elif score < 60:
+                    col3.metric("Risk Level", "MEDIUM", help="AI can nearly pass")
+                else:
+                    col3.metric("Risk Level", "HIGH", help="AI can pass this quiz")
 
-                    log("Preparing scan results...", "📦")
+                st.info("""
+                **Basic Scan Complete!** This shows how well AI performs with general knowledge only.
 
-                    # Handle single-scan vs full-scan mode
-                    if is_full_scan_mode and st.session_state.with_rag_file:
-                        # Full scan mode - merge both files
-                        merged = merge_attempts(
-                            st.session_state.no_rag_file,
-                            st.session_state.with_rag_file,
-                            no_rag_score=st.session_state.no_rag_score,
-                            with_rag_score=st.session_state.with_rag_score
+                For a more comprehensive analysis that shows how course materials affect AI performance,
+                go to the **Instructions** tab and choose **Complete Assessment**.
+                """)
+        
+            st.divider()
+        
+            # Report generation or display
+            if st.session_state.report_file:
+                # Dashboard is in DASHBOARDS_DIR with base name
+                report_path = Path(st.session_state.report_file)
+                base_name = report_path.stem.replace('_analysis_report', '').replace('_vulnerability_report', '')
+
+                # Try multiple possible locations for the dashboard
+                possible_paths = [
+                    DASHBOARDS_DIR / f"{base_name}_dashboard.html",
+                    Path("./output/dashboards") / f"{base_name}_dashboard.html",
+                    report_path.parent / f"{base_name}_dashboard.html",
+                    Path(".") / f"{base_name}_dashboard.html",
+                ]
+
+                dashboard = None
+                for path in possible_paths:
+                    if path.exists():
+                        dashboard = path
+                        break
+
+                if dashboard and dashboard.exists():
+                    st.subheader("Detailed Analysis")
+                
+                    with open(dashboard) as f:
+                        html = f.read()
+                
+                    st.components.v1.html(html, height=650, scrolling=True)
+                
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.download_button(
+                            "📥 Download Dashboard (HTML)",
+                            html,
+                            "quiz_vulnerability_dashboard.html",
+                            "text/html",
+                            use_container_width=True
                         )
+                    with col2:
+                        with open(st.session_state.report_file) as f:
+                            report_data = f.read()
+                        st.download_button(
+                            "📥 Download Report (JSON)",
+                            report_data,
+                            "vulnerability_report.json", 
+                            "application/json",
+                            use_container_width=True
+                        )
+                else:
+                    st.error("Dashboard file not found. Try generating the report again.")
+                    with st.expander("Debug info"):
+                        st.write(f"Report file: {st.session_state.report_file}")
+                        st.write(f"Base name: {base_name}")
+                        st.write("Searched paths:")
+                        for path in possible_paths:
+                            st.write(f"  - {path} (exists: {path.exists()})")
+
+            else:
+                left, right = st.columns([3, 2])
+
+                with left:
+                    st.subheader("Generate Analysis Report")
+
+                    st.markdown("**Your scan is complete.** Generate a detailed report to:")
+
+                    if is_full_scan_mode:
+                        st.markdown("""
+                        - Classify each question by cognitive type
+                        - Compare baseline vs enhanced AI performance
+                        - Identify the most vulnerable questions
+                        - Create an interactive dashboard
+                        """)
                     else:
-                        # Basic scan mode - use single file with score info
-                        merged = merge_attempts(
-                            st.session_state.no_rag_file,
-                            None,  # No second scan
-                            no_rag_score=st.session_state.no_rag_score,
-                            with_rag_score=None
-                        )
-                    st.session_state.merged_file = merged
-                    
-                    # Load to get question count
-                    with open(merged) as f:
-                        merged_data = json.load(f)
-                    total_q = len(merged_data.get('questions', []))
-                    log(f"Merged {total_q} questions", "✅")
-                    
-                    # Phase 1: Reform agent
-                    log("Phase 1: Classifying questions...", "🏷️")
-                    
-                    with st.spinner(f"Classifying {total_q} questions..."):
-                        result1 = subprocess.run(
-                            ['python3', 'reform_agent.py', merged, '--model', st.session_state.model],
-                            capture_output=True,
-                            text=True
-                        )
-                    
-                    # Parse reform_agent output for question-level logging
-                    for line in result1.stdout.split('\n'):
-                        line = line.strip()
-                        if "Classifying Question" in line:
-                            match = re.search(r'Question (\d+)', line)
-                            if match:
-                                log(f"Classifying Q{match.group(1)}...", "🔍")
-                        elif "Type:" in line:
-                            qtype = line.split("Type:")[1].strip()
-                            log(f"  Type: {qtype}", "📝")
-                        elif "Vulnerability:" in line:
-                            vuln = line.split("Vulnerability:")[1].strip()
-                            icon = "🔴" if vuln == "HIGH" else "🟡" if vuln == "MODERATE" else "🟢" if vuln == "LOW" else "⚪"
-                            log(f"  Vulnerability: {vuln}", icon)
-                    
-                    report = merged.replace('.json', '_analysis_report.json')
-                    if not os.path.exists(report):
-                        # Try alternate filename in case reform_agent uses different naming
-                        alt_report = merged.replace('.json', '_vulnerability_report.json')
-                        if os.path.exists(alt_report):
-                            report = alt_report
+                        st.markdown("""
+                        - Classify each question by cognitive type
+                        - Identify the most vulnerable questions
+                        - Create an interactive dashboard
+                        """)
+
+                    st.markdown("")
+
+                    if st.button("🔬 Generate Report", type="primary", use_container_width=True):
+                        clear_log()
+                        import subprocess
+
+                        log("Preparing scan results...", "📦")
+
+                        # Handle single-scan vs full-scan mode
+                        if is_full_scan_mode and st.session_state.with_rag_file:
+                            # Full scan mode - merge both files
+                            merged = merge_attempts(
+                                st.session_state.no_rag_file,
+                                st.session_state.with_rag_file,
+                                no_rag_score=st.session_state.no_rag_score,
+                                with_rag_score=st.session_state.with_rag_score
+                            )
                         else:
-                            log("Classification failed", "❌")
-                            st.error(f"Reform agent failed.\n\nStderr: {result1.stderr[:500] if result1.stderr else 'None'}")
-                            st.stop()
+                            # Basic scan mode - use single file with score info
+                            merged = merge_attempts(
+                                st.session_state.no_rag_file,
+                                None,  # No second scan
+                                no_rag_score=st.session_state.no_rag_score,
+                                with_rag_score=None
+                            )
+                        st.session_state.merged_file = merged
                     
-                    log("Phase 1 complete!", "✅")
+                        # Load to get question count
+                        with open(merged) as f:
+                            merged_data = json.load(f)
+                        total_q = len(merged_data.get('questions', []))
+                        log(f"Merged {total_q} questions", "✅")
                     
-                    # Phase 2: Analysis agent
-                    log("Phase 2: Building dashboard...", "📊")
+                        # Phase 1: Reform agent
+                        log("Phase 1: Classifying questions...", "🏷️")
                     
-                    with st.spinner("Generating dashboard..."):
-                        result2 = subprocess.run(
-                            ['python3', 'analysis_agent.py', report],
-                            capture_output=True,
-                            text=True
-                        )
+                        with st.spinner(f"Classifying {total_q} questions..."):
+                            result1 = subprocess.run(
+                                ['python3', 'reform_agent.py', merged, '--model', st.session_state.model],
+                                capture_output=True,
+                                text=True
+                            )
                     
-                    # Parse analysis_agent output
-                    for line in result2.stdout.split('\n'):
-                        line = line.strip()
-                        if "Calculating" in line:
-                            log("Calculating statistics...", "🔢")
-                        elif "LLM interpretation" in line.lower():
-                            log("Generating AI insights...", "🤖")
-                        elif "markdown" in line.lower() and "saved" in line.lower():
-                            log("Markdown summary created", "📄")
-                        elif "Dashboard saved" in line:
-                            log("HTML dashboard created", "🎨")
+                        # Parse reform_agent output for question-level logging
+                        for line in result1.stdout.split('\n'):
+                            line = line.strip()
+                            if "Classifying Question" in line:
+                                match = re.search(r'Question (\d+)', line)
+                                if match:
+                                    log(f"Classifying Q{match.group(1)}...", "🔍")
+                            elif "Type:" in line:
+                                qtype = line.split("Type:")[1].strip()
+                                log(f"  Type: {qtype}", "📝")
+                            elif "Vulnerability:" in line:
+                                vuln = line.split("Vulnerability:")[1].strip()
+                                icon = "🔴" if vuln == "HIGH" else "🟡" if vuln == "MODERATE" else "🟢" if vuln == "LOW" else "⚪"
+                                log(f"  Vulnerability: {vuln}", icon)
                     
-                    # Dashboard is in DASHBOARDS_DIR
-                    report_path = Path(report)
-                    base_name = report_path.stem.replace('_analysis_report', '').replace('_vulnerability_report', '')
-                    dashboard = DASHBOARDS_DIR / f"{base_name}_dashboard.html"
+                        report = merged.replace('.json', '_analysis_report.json')
+                        if not os.path.exists(report):
+                            # Try alternate filename in case reform_agent uses different naming
+                            alt_report = merged.replace('.json', '_vulnerability_report.json')
+                            if os.path.exists(alt_report):
+                                report = alt_report
+                            else:
+                                log("Classification failed", "❌")
+                                st.error(f"Reform agent failed.\n\nStderr: {result1.stderr[:500] if result1.stderr else 'None'}")
+                                st.stop()
+                    
+                        log("Phase 1 complete!", "✅")
+                    
+                        # Phase 2: Analysis agent
+                        log("Phase 2: Building dashboard...", "📊")
+                    
+                        with st.spinner("Generating dashboard..."):
+                            result2 = subprocess.run(
+                                ['python3', 'analysis_agent.py', report],
+                                capture_output=True,
+                                text=True
+                            )
+                    
+                        # Parse analysis_agent output
+                        for line in result2.stdout.split('\n'):
+                            line = line.strip()
+                            if "Calculating" in line:
+                                log("Calculating statistics...", "🔢")
+                            elif "LLM interpretation" in line.lower():
+                                log("Generating AI insights...", "🤖")
+                            elif "markdown" in line.lower() and "saved" in line.lower():
+                                log("Markdown summary created", "📄")
+                            elif "Dashboard saved" in line:
+                                log("HTML dashboard created", "🎨")
+                    
+                        # Dashboard is in DASHBOARDS_DIR
+                        report_path = Path(report)
+                        base_name = report_path.stem.replace('_analysis_report', '').replace('_vulnerability_report', '')
+                        dashboard = DASHBOARDS_DIR / f"{base_name}_dashboard.html"
 
-                    if dashboard.exists():
-                        log("Phase 2 complete!", "✅")
-                        log("Dashboard ready to view!", "🎉")
-                        st.session_state.report_file = report
-                    else:
-                        log("Dashboard generation had issues", "⚠️")
-                        st.warning(f"Dashboard not generated.\n\nStderr: {result2.stderr[:500] if result2.stderr else 'None'}")
-                        st.session_state.report_file = report
+                        if dashboard.exists():
+                            log("Phase 2 complete!", "✅")
+                            log("Dashboard ready to view!", "🎉")
+                            st.session_state.report_file = report
+                        else:
+                            log("Dashboard generation had issues", "⚠️")
+                            st.warning(f"Dashboard not generated.\n\nStderr: {result2.stderr[:500] if result2.stderr else 'None'}")
+                            st.session_state.report_file = report
                     
-                    st.rerun()
+                        st.rerun()
             
-            with right:
-                st.subheader("Activity")
-                with st.container(height=350):
-                    show_activity()
+                with right:
+                    st.subheader("Activity")
+                    with st.container(height=350):
+                        show_activity()
 
 
-# ----------------------------------------
-# TAB 5: TEST QUESTIONS
+    # ----------------------------------------
+    # TAB 5: TEST QUESTIONS
 # ----------------------------------------
 
 def check_rag_available():
@@ -2396,15 +2526,24 @@ Begin your analysis:"""
 
 
 with tab5:
-    st.subheader("🧪 Test Individual Questions")
-    
-    st.info("""
-    **Test questions without browser automation.** 
-    Paste a question, see how AI performs with single or multi-sample testing.
-    
-    **Multi-sample mode:** Runs AI multiple times and selects the **most common answer** (by count).
-    Consistency shows how often AI chose the same answer (e.g., "7/10" = 70% agreement).
-    """)
+    st.subheader("🧪 Test a Single Question")
+
+    # Show instructions at the top (matching the workflow description)
+    with st.expander("📋 Instructions", expanded=True):
+        st.markdown("""
+        **Steps:**
+        1. Type or paste a quiz question with multiple choice options
+        2. Mark the correct answer
+        3. Click "Test Question" to run the AI against that question
+        4. Review the result and see if the AI answered it correctly (and how confident it was)
+
+        **Notes:**
+        - Individual questions are tested with your configured LLM
+        - No Moodle connection needed
+        - Takes 30 seconds to 2 minutes depending on model speed (and number of samples)
+        - **Multi-sample mode:** Runs AI multiple times and selects the **most common answer**
+        - Consistency shows how often AI chose the same answer (e.g., "7/10" = 70% agreement)
+        """)
     
     # Initialize session state for this tab
     if 'test_question_result' not in st.session_state:
@@ -2612,42 +2751,6 @@ with tab5:
 # ----------------------------------------
 # TAB 6: SETTINGS
 # ----------------------------------------
-
-def get_all_rag_collections():
-    """Get all RAG collections from the database."""
-    collections = []
-    try:
-        import chromadb
-        if os.path.exists(str(CHROMA_DB_PATH)):
-            client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-            for coll in client.list_collections():
-                if coll.name.startswith(RAG_COLLECTION_PREFIX):
-                    display_name = get_display_name(coll.name)
-                    count = coll.count()
-                    collections.append({
-                        'name': coll.name,
-                        'display_name': display_name,
-                        'count': count
-                    })
-    except:
-        pass
-    return collections
-
-def get_collection_files(collection_name):
-    """Get list of source files in a collection."""
-    files = {}
-    try:
-        import chromadb
-        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-        coll = client.get_collection(collection_name)
-        # Get all metadata
-        results = coll.get(include=['metadatas'])
-        for meta in results.get('metadatas', []):
-            source = meta.get('source', 'Unknown')
-            files[source] = files.get(source, 0) + 1
-    except:
-        pass
-    return files
 
 if tab6 is not None:
     with tab6:
@@ -2879,17 +2982,17 @@ if tab6 is not None:
             st.markdown("---")
             st.markdown("### 🔄 Scan Mode")
 
-            current_mode = "Full Scan (2 scans)" if st.session_state.use_rag_mode else "Basic Scan (1 scan)"
+            current_mode = "Complete Assessment (2 scans)" if st.session_state.use_rag_mode else "Baseline Scan (1 scan)"
             st.caption(f"Current mode: **{current_mode}**")
 
             if st.session_state.use_rag_mode:
-                st.info("Full Scan mode compares AI performance with and without course materials.")
-                if st.button("Switch to Basic Scan", use_container_width=True):
+                st.info("Complete Assessment compares AI performance with and without course materials.")
+                if st.button("Switch to Baseline Scan", use_container_width=True):
                     st.session_state.use_rag_mode = False
                     st.rerun()
             else:
-                st.info("Basic Scan mode runs one quick test with general knowledge only.")
-                if st.button("Switch to Full Scan", type="primary", use_container_width=True):
+                st.info("Baseline Scan tests with general knowledge only.")
+                if st.button("Switch to Complete Assessment", type="primary", use_container_width=True):
                     st.session_state.use_rag_mode = True
                     st.rerun()
 
@@ -2902,4 +3005,4 @@ if tab6 is not None:
 
 # Footer
 st.divider()
-st.caption("Quiz Vulnerability Scanner • Built for TEQSA-aligned assessment integrity")
+st.caption("Quiz Vulnerability Assessment Framework")
