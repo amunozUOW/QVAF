@@ -93,7 +93,6 @@ def find_moodle_page(browser):
 
 st.set_page_config(
     page_title="Quiz Vulnerability Scanner",
-    page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -1103,9 +1102,79 @@ def show_onboarding():
                 st.caption("Add materials first")
 
 
-# Check if we should show onboarding
+# Check if system is ready (show minimal setup check only)
 if not st.session_state.onboarding_complete:
-    show_onboarding()
+    # Landing page with two-column layout
+    st.title("Quiz Vulnerability Assessment Framework")
+    st.caption("Test how well your quiz resists AI-assisted cheating")
+    
+    st.markdown("---")
+    
+    # Status checks at the top
+    text_model_ok, vision_ok = check_ollama()
+    chrome_ok, _ = check_chrome()
+    
+    status_col1, status_col2 = st.columns(2)
+    
+    with status_col1:
+        if text_model_ok:
+            st.success("AI Models Ready")
+        else:
+            st.error("AI Models Missing")
+    
+    with status_col2:
+        if chrome_ok:
+            st.success("Browser Connected")
+            st.session_state.chrome_ok = True
+        else:
+            st.info("Browser not detected - will check when you connect")
+    
+    st.markdown("---")
+    
+    # Two-column layout: Left = System Check, Right = Instructions
+    left_col, right_col = st.columns(2)
+    
+    with left_col:
+        st.subheader("System Check")
+        
+        if text_model_ok:
+            st.markdown("Missing AI models installation? Run in terminal:")
+            st.code("ollama pull llama3:8b")
+            st.success("All systems ready!")
+            if st.button("Start", type="primary", use_container_width=True):
+                st.session_state.onboarding_complete = True
+                st.rerun()
+        else:
+            st.warning("Please install AI models before proceeding.")
+            if st.button("Check Again", use_container_width=True):
+                check_ollama.clear()
+                st.rerun()
+    
+    with right_col:
+        st.subheader("Getting Started")
+        
+        st.markdown("""
+        **Choose your assessment path:**
+        
+        **1. Quick Test** (2-3 minutes)
+        - Test a single question instantly
+        - No setup needed
+        - No browser connection required
+        
+        **2. Baseline Scan** (5-15 minutes)
+        - Full quiz assessment without course materials
+        - See baseline AI vulnerability
+        - Requires Moodle browser connection
+        
+        **3. Complete Assessment** (10-30 minutes)
+        - Full quiz with AND without course materials
+        - Detailed comparison showing material impact
+        - Flexible: upload materials before OR after first scan
+        - Requires Moodle browser connection
+        """)
+        
+        st.info("Click **Start** to begin with any of these options.")
+    
     st.stop()
 
 
@@ -1116,16 +1185,214 @@ if not st.session_state.onboarding_complete:
 st.title("Quiz Vulnerability Scanner")
 st.caption("Test how well your quiz resists AI-assisted cheating")
 
-# Show different tabs based on scan mode
-use_rag = st.session_state.use_rag_mode
-
-if use_rag:
-    # Full scan mode - all tabs
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🔌 Connect", "1️⃣ First Scan", "2️⃣ Second Scan", "📊 Results", "🧪 Test Question", "⚙️ Settings"])
+# Track workflow state
+workflow = st.session_state.use_rag_mode
+if workflow is None:
+    workflow_type = "instructions"  # User hasn't chosen a workflow yet
+    workflow_name = "Choose a Workflow"
+elif workflow is True:
+    workflow_type = "full_assessment"
+    workflow_name = "Full Assessment (with and without course materials)"
 else:
-    # Basic scan mode - no Second Scan tab
-    tab1, tab2, tab4, tab5, tab6 = st.tabs(["🔌 Connect", "📊 Scan", "📊 Results", "🧪 Test Question", "⚙️ Settings"])
-    tab3 = None  # No second scan tab in basic mode
+    workflow_type = "basic_scan"
+    workflow_name = "Baseline Scan (general knowledge only)"
+
+# Breadcrumb/Status Banner
+st.markdown("---")
+breadcrumb_col1, breadcrumb_col2 = st.columns([2, 1])
+with breadcrumb_col1:
+    st.caption(f"**Current Workflow:** {workflow_name}")
+with breadcrumb_col2:
+    scanning_status = ""
+    if st.session_state.is_scanning:
+        scanning_status = "🔄 Scanning..."
+    elif st.session_state.is_testing:
+        scanning_status = "🔄 Testing question..."
+    elif st.session_state.no_rag_score and not st.session_state.with_rag_score and workflow == True:
+        scanning_status = "✓ Baseline complete, ready for second scan"
+    elif st.session_state.no_rag_score and st.session_state.with_rag_score:
+        scanning_status = "✓ Both scans complete"
+    elif st.session_state.no_rag_score:
+        scanning_status = "✓ Scan complete"
+    
+    if scanning_status:
+        st.caption(scanning_status)
+
+st.markdown("---")
+
+# Build tab list dynamically based on workflow
+# Instructions always first, Test Question always last (for scan workflows)
+if workflow_type == "instructions":
+    # Just choosing workflow - show only these two
+    labels = ["Instructions", "Test Question"]
+elif workflow_type == "basic_scan":
+    # Baseline Scan path: Connect required, Results after scan
+    labels = ["Instructions", "Connect", "Scan", "Results", "Test Question"]
+elif workflow_type == "full_assessment":
+    # Complete Assessment path: Both scans with results
+    labels = ["Instructions", "Connect", "First Scan", "Second Scan", "Results", "Test Question"]
+else:
+    labels = ["Instructions", "Test Question"]
+
+# Allow navigation buttons on the Instructions page to make a tab appear selected
+nav_target = st.session_state.get('navigate_to', None)
+
+if nav_target == 'test_question' and 'Test Question' in labels:
+    labels = [l for l in labels if l != 'Test Question']
+    labels.insert(0, 'Test Question')
+elif nav_target == 'first_scan':
+    target = 'First Scan' if workflow == True else 'Scan'
+    if target in labels:
+        labels = [l for l in labels if l != target]
+        labels.insert(0, target)
+elif nav_target == 'second_scan' and 'Second Scan' in labels:
+    labels = [l for l in labels if l != 'Second Scan']
+    labels.insert(0, 'Second Scan')
+elif nav_target == 'results' and 'Results' in labels:
+    labels = [l for l in labels if l != 'Results']
+    labels.insert(0, 'Results')
+
+tab_objs = st.tabs(labels)
+
+def _get_tab_obj(name):
+    try:
+        return tab_objs[labels.index(name)]
+    except Exception:
+        return None
+
+tab0 = _get_tab_obj('Instructions')
+tab1 = _get_tab_obj('Connect')
+tab2 = _get_tab_obj('First Scan') or _get_tab_obj('Scan')
+tab3 = _get_tab_obj('Second Scan')
+tab4 = _get_tab_obj('Results')
+tab5 = _get_tab_obj('Test Question')
+tab6 = None  # Settings tab removed - use course materials upload links instead
+
+# Clear navigation target so subsequent interactions use normal tab order
+if 'navigate_to' in st.session_state:
+    st.session_state.navigate_to = None
+
+
+# ----------------------------------------
+# TAB 0: INSTRUCTIONS
+# ----------------------------------------
+
+with tab0:
+    st.subheader("How to Use the Quiz Vulnerability Scanner")
+    
+    st.markdown("""
+    This tool tests how well your quiz resists AI-assisted cheating. Choose one of the workflows below:
+    """)
+    
+    # Quick Test Tab
+    with st.expander("Quick Test: Testing a single question quickly, no setup needed (2-3 minutes)", expanded=False):
+        st.markdown("""
+        
+        **Steps:**
+        1. Type or paste a quiz question with multiple choice options
+        2. Mark the correct answer
+        3. Click "Test Single Question" to run the AI against that question
+        4. Review the result and see if the AI answered it correctly (and how confident it was in providing the answer)
+        
+        **Notes:**
+        - Individual questions are tested with your configured LLM
+        - No Moodle connection needed
+        - Takes 30 seconds to 2 minutes depending on model speed (and number of samples requested)
+        - Basic analysis is provided
+        """)
+        
+        if st.button("Go to Test Question tab", use_container_width=True, key="nav_test_q"):
+            st.session_state.navigate_to = 'test_question'
+            # Test question does not require Moodle/scan mode
+            st.session_state.use_rag_mode = st.session_state.use_rag_mode
+            st.rerun()
+    
+    # Baseline Scan Tab
+    with st.expander("Baseline Scan: Quiz without Course Materials (5-15 minutes)", expanded=False):
+        st.markdown("""
+              
+        **Steps:**
+        1. Open your Moodle quiz in Chrome and start an attempt (or start preview)
+        2. Make sure the first question is visible
+        3. Click the **Connect** button and make sure browser is connected
+        4. Click the **Scan** button
+        5. The scanner will:
+           - Read each question from your quiz
+           - Ask the AI to answer each question using only general knowledge
+           - Automatically submit answers to Moodle
+        6. When complete, submit the answers and navigate to the results page in Moodle.
+        7. Click the collect results button, a basic dashboard should appear showing some basic metrics. For a full report, click on the **Generate Report** button.            
+                    
+        **What happens:**
+        - We test your quiz with AI using only general knowledge (no course materials)
+        - This gives you a baseline vulnerability measurement
+        - Shows which questions are easiest/hardest for AI to answer
+        - Takes 5-15 minutes depending on quiz length and model speed
+        """)
+        
+        if st.button("Start Baseline Scan", use_container_width=True, key="nav_baseline"):
+            st.session_state.navigate_to = 'first_scan'
+            st.session_state.use_rag_mode = False
+            st.rerun()
+    
+    # Full Scan Tab
+    with st.expander("Complete Assessment: With and Without Course Materials (10-30 minutes)", expanded=False):
+        st.markdown("""
+      
+        This runs two scans to show how course materials affect AI performance:
+        
+        **Steps:**
+        1. Open your Moodle quiz in Chrome and start an attempt (or start preview)
+        2. Make sure the first question is visible
+        3. Click the **Connect** button and make sure browser is connected
+        4. Go to the **First Scan** tab and click "Start First Scan"
+        5. The scanner will:
+           - Read each question from your quiz
+           - Ask the AI to answer each question using only general knowledge
+           - Automatically submit answers to Moodle
+        6. When complete, submit the answers and navigate to the results page in Moodle.
+        7. Click the collect results button, then start a new quiz attempt/preview in Moodle.
+        
+        **Upload Course Materials** (Choose when it fits your workflow):
+        - **Option A (Recommended):** Upload materials before First Scan in the **First Scan** tab
+        - **Option B:** Do First Scan, then upload before Second Scan in the **Second Scan** tab
+        
+        6. Go to the **Second Scan** tab and click "Start Second Scan"
+           - Tests your quiz with AI having access to your uploaded course materials
+        8. When both scans are complete, go to the **Results** tab and click **Generate Report** for detailed analysis
+        
+        **What happens:**
+        - First scan: AI answers without any course materials (baseline vulnerability)
+        - Second scan: AI answers with full access to your course materials
+        - Detailed comparison showing which questions become easier when AI has materials
+        - Identifies material-specific vulnerabilities vs general knowledge vulnerabilities
+        - Takes 10-30 minutes depending on quiz length and course materials
+        """)
+        
+        if st.button("Start Complete Assessment", use_container_width=True, key="nav_full"):
+            st.session_state.navigate_to = 'first_scan'
+            st.session_state.use_rag_mode = True
+            st.rerun()
+        
+        # Settings & Configuration as sub-expander
+        st.markdown("---")
+        st.markdown("**Preparing Course Materials**")
+        st.markdown("""
+        Upload materials that students might share with an AI to help with your quiz:
+        - Lecture slides or notes
+        - Textbook chapters or excerpts
+        - Study guides
+        - Any required readings
+        
+        You can upload these materials at two flexible points:
+        - **Before First Scan** in the **First Scan** tab
+        - **Before Second Scan** in the **Second Scan** tab
+        """)
+    
+    st.markdown("---")
+    
+    st.info("**Tip:** Start with Quick Test to verify everything is working, then move to a full scan for detailed insights.")
+
 
 
 # ----------------------------------------
@@ -1200,6 +1467,33 @@ with tab1:
                 Then navigate to your quiz and start an attempt.
                 """)
 
+        # System Status (moved here from the initial landing page)
+        st.markdown("---")
+        st.subheader("System Status")
+        text_model_ok, vision_ok = check_ollama()
+        chrome_ok, chrome_msg = check_chrome()
+
+        s_col1, s_col2 = st.columns(2)
+        with s_col1:
+            if text_model_ok:
+                st.success("AI models ready")
+            else:
+                st.error("AI models missing")
+                st.caption("Install with: ollama pull llama3:8b")
+        with s_col2:
+            if chrome_ok:
+                st.success("Browser detected")
+                st.caption(chrome_msg[:200] if chrome_msg else "")
+                st.session_state.chrome_ok = True
+            else:
+                st.info("Browser not connected")
+                if chrome_msg:
+                    st.caption("Detected error: " + chrome_msg)
+
+        if st.button("Refresh System Status"):
+            check_ollama.clear()
+            st.experimental_rerun()
+
         with right:
             st.subheader("Activity")
             with st.container(height=300):
@@ -1246,15 +1540,29 @@ with tab2:
 
             st.markdown("---")
 
-            # Guide to next step based on mode
-            st.markdown("### Next Step")
+            # Auto-navigate based on workflow
             if st.session_state.use_rag_mode:
+                # Full assessment mode: guide to Second Scan
                 if not st.session_state.with_rag_score:
-                    st.info("Now go to the **Second Scan** tab to test with course materials.")
+                    st.info("Next: Go to **Second Scan** tab to test with course materials.")
+                    st.markdown("")
+                    if st.button("Continue to Second Scan", type="primary", use_container_width=True):
+                        st.session_state.navigate_to = 'second_scan'
+                        st.rerun()
                 else:
-                    st.info("Go to the **Results** tab to generate your full analysis report.")
+                    # Both scans done
+                    st.success("Both scans complete! Go to **Results** for full analysis.")
+                    st.markdown("")
+                    if st.button("Generate Report", type="primary", use_container_width=True):
+                        st.session_state.navigate_to = 'results'
+                        st.rerun()
             else:
-                st.info("Go to the **Results** tab to generate your analysis report.")
+                # Basic scan mode: go straight to Results
+                st.success("Ready to generate your analysis report.")
+                st.markdown("")
+                if st.button("View Results", type="primary", use_container_width=True):
+                    st.session_state.navigate_to = 'results'
+                    st.rerun()
 
         # STATE 3: Answers filled, waiting for submission
         elif st.session_state.no_rag_file:
@@ -1283,6 +1591,82 @@ with tab2:
             st.markdown(f"**{scan_description}**")
 
             st.markdown("---")
+
+            # Course materials upload (Option A - before first scan)
+            if st.session_state.use_rag_mode:
+                with st.expander("📚 Upload Course Materials (Optional for Option A)", expanded=False):
+                    st.markdown("""
+                    **Option A: Upload Before First Scan**
+                    
+                    You can upload course materials now, and they'll be available for the Second Scan.
+                    Materials help show how AI performance changes when it has access to your course content.
+                    
+                    Upload your:
+                    - Lecture slides/notes
+                    - Textbook excerpts
+                    - Study guides
+                    - Required readings
+                    """)
+                    
+                    selected_collection = st.session_state.selected_rag_collection
+                    selected_internal_name = get_rag_collection_name(selected_collection)
+                    
+                    uploaded_files = st.file_uploader(
+                        "Drop course materials here (TXT, MD, or PDF)",
+                        type=['txt', 'md', 'pdf'],
+                        accept_multiple_files=True,
+                        key="rag_upload_tab2_before"
+                    )
+
+                    if uploaded_files:
+                        if st.button("📥 Add Materials", type="secondary", key="add_rag_tab2_before"):
+                            try:
+                                import chromadb
+                                client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+                                coll = client.get_or_create_collection(name=selected_internal_name)
+
+                                total_chunks = 0
+                                for uploaded_file in uploaded_files:
+                                    content = ""
+                                    if uploaded_file.name.endswith('.pdf'):
+                                        try:
+                                            from pypdf import PdfReader
+                                            import io
+                                            reader = PdfReader(io.BytesIO(uploaded_file.read()))
+                                            content = "\n".join([page.extract_text() for page in reader.pages])
+                                        except ImportError:
+                                            st.warning("PDF support requires: pip install pypdf")
+                                            continue
+                                    else:
+                                        content = uploaded_file.read().decode('utf-8', errors='ignore')
+
+                                    if not content.strip():
+                                        continue
+
+                                    # Chunk content
+                                    chunk_size, overlap = 1000, 200
+                                    chunks = []
+                                    start = 0
+                                    while start < len(content):
+                                        chunk = content[start:start + chunk_size]
+                                        if chunk.strip():
+                                            chunks.append(chunk)
+                                        start += chunk_size - overlap
+
+                                    if chunks:
+                                        base_id = f"{selected_collection}_{uploaded_file.name}".replace(" ", "_")[:50]
+                                        coll.add(
+                                            documents=chunks,
+                                            ids=[f"{base_id}_chunk_{i}" for i in range(len(chunks))],
+                                            metadatas=[{"source": uploaded_file.name, "chunk": i} for i in range(len(chunks))]
+                                        )
+                                        total_chunks += len(chunks)
+
+                                if total_chunks > 0:
+                                    st.success(f"✓ Added {total_chunks} chunks to {selected_collection}!")
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
 
             st.markdown("**Before you start:**")
             st.markdown("• Make sure your quiz is open in Chrome")
@@ -1382,7 +1766,7 @@ if tab3 is not None:
                     - Textbook excerpts
                     - Study guides
 
-                    Or go to **Settings** tab to create/select a different course.
+                    You can upload them here now, or create/select a different course collection above.
                     """)
 
                     uploaded_files = st.file_uploader(
@@ -1471,9 +1855,12 @@ if tab3 is not None:
 
                 st.markdown("---")
 
-                # Guide to next step
-                st.markdown("### Next Step")
-                st.info("Go to the **Results** tab to generate your full analysis report.")
+                # Auto-navigate to Results
+                st.success("Both scans complete! Ready to generate full analysis report.")
+                st.markdown("")
+                if st.button("Generate Report", type="primary", use_container_width=True):
+                    st.session_state.navigate_to = 'results'
+                    st.rerun()
 
             # STATE 3: Answers filled, waiting for submission
             elif st.session_state.with_rag_file:
@@ -1600,7 +1987,7 @@ with tab4:
             **Basic Scan Complete!** This shows how well AI performs with general knowledge only.
 
             For a more comprehensive analysis that shows how course materials affect AI performance,
-            go to **Settings** and switch to Full Scan mode.
+            go to the **Instructions** tab and choose **Complete Assessment**.
             """)
         
         st.divider()
@@ -1685,7 +2072,7 @@ with tab4:
 
                 st.markdown("")
 
-                if st.button("🔬 Generate Full Report", type="primary", use_container_width=True):
+                if st.button("🔬 Generate Report", type="primary", use_container_width=True):
                     clear_log()
                     import subprocess
 
@@ -2262,255 +2649,256 @@ def get_collection_files(collection_name):
         pass
     return files
 
-with tab6:
-    st.subheader("Settings")
+if tab6 is not None:
+    with tab6:
+        st.subheader("Settings")
 
-    col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2)
 
-    with col1:
-        st.markdown("### 📚 Course Materials")
+        with col1:
+            st.markdown("### 📚 Course Materials")
 
-        # Get existing collections
-        all_collections = get_all_rag_collections()
-        collection_names = [c['display_name'] for c in all_collections]
+            # Get existing collections
+            all_collections = get_all_rag_collections()
+            collection_names = [c['display_name'] for c in all_collections]
 
-        # ========================================
-        # STEP 1: Select or Create a Collection
-        # ========================================
-        st.markdown("#### Step 1: Select a Course")
-        st.caption("Each course has its own set of materials. Select an existing course or create a new one.")
+            # ========================================
+            # STEP 1: Select or Create a Collection
+            # ========================================
+            st.markdown("#### Step 1: Select a Course")
+            st.caption("Each course has its own set of materials. Select an existing course or create a new one.")
 
-        # Create new collection option
-        with st.expander("➕ Create New Course", expanded=len(all_collections) == 0):
-            new_name = st.text_input(
-                "Course name",
-                placeholder="e.g., PSYC101, Biology 200, History Fall 2024",
-                key="new_collection_name"
-            )
-            if st.button("Create Course", type="primary", disabled=not new_name):
-                if new_name:
-                    try:
-                        import chromadb
-                        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-                        internal_name = get_rag_collection_name(new_name)
-                        client.get_or_create_collection(name=internal_name)
-                        st.session_state.selected_rag_collection = new_name
-                        st.success(f"✓ Created course: {new_name}")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error creating course: {e}")
-
-        # Select existing collection
-        if all_collections:
-            # Find current selection index
-            current_idx = 0
-            for i, name in enumerate(collection_names):
-                if name == st.session_state.selected_rag_collection:
-                    current_idx = i
-                    break
-
-            selected = st.selectbox(
-                "Select course",
-                collection_names,
-                index=current_idx,
-                key="collection_selector"
-            )
-
-            if selected != st.session_state.selected_rag_collection:
-                st.session_state.selected_rag_collection = selected
-                st.rerun()
-
-            # Show selected collection info
-            selected_coll = next((c for c in all_collections if c['display_name'] == selected), None)
-            if selected_coll:
-                st.success(f"✓ **{selected}** — {selected_coll['count']} chunks loaded")
-
-                # Show files in collection
-                files = get_collection_files(selected_coll['name'])
-                if files:
-                    with st.expander(f"📁 Files in {selected} ({len(files)} files)"):
-                        for filename, chunk_count in files.items():
-                            st.text(f"  • {filename} ({chunk_count} chunks)")
-        else:
-            st.info("No courses created yet. Create one above to get started.")
-
-        st.markdown("---")
-
-        # ========================================
-        # STEP 2: Upload Materials
-        # ========================================
-        st.markdown("#### Step 2: Upload Materials")
-        st.caption("Add lecture notes, textbook excerpts, or study guides to the selected course.")
-
-        if not all_collections:
-            st.warning("Create a course first before uploading materials.")
-        else:
-            uploaded_files = st.file_uploader(
-                f"Upload to: **{st.session_state.selected_rag_collection}**",
-                type=['txt', 'md', 'pdf'],
-                accept_multiple_files=True,
-                help="Supported formats: .txt, .md, .pdf",
-                key="rag_file_uploader_settings"
-            )
-
-            if uploaded_files:
-                if st.button("📥 Add to Course", type="primary", key="add_to_collection_btn"):
-                    try:
-                        import chromadb
-                        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-                        internal_name = get_rag_collection_name(st.session_state.selected_rag_collection)
-                        collection = client.get_or_create_collection(name=internal_name)
-
-                        total_chunks = 0
-                        for uploaded_file in uploaded_files:
-                            content = ""
-                            if uploaded_file.name.endswith('.pdf'):
-                                try:
-                                    from pypdf import PdfReader
-                                    import io
-                                    reader = PdfReader(io.BytesIO(uploaded_file.read()))
-                                    content = "\n".join([page.extract_text() for page in reader.pages])
-                                except ImportError:
-                                    st.warning("PDF support requires: pip install pypdf")
-                                    continue
-                            else:
-                                content = uploaded_file.read().decode('utf-8', errors='ignore')
-
-                            if not content.strip():
-                                st.warning(f"Skipped {uploaded_file.name} (empty or unreadable)")
-                                continue
-
-                            # Chunk the content
-                            chunk_size, overlap = 1000, 200
-                            chunks = []
-                            start = 0
-                            while start < len(content):
-                                chunk = content[start:start + chunk_size]
-                                if chunk.strip():
-                                    chunks.append(chunk)
-                                start += chunk_size - overlap
-
-                            if chunks:
-                                base_id = f"{st.session_state.selected_rag_collection}_{uploaded_file.name}".replace(" ", "_")[:50]
-                                collection.add(
-                                    documents=chunks,
-                                    ids=[f"{base_id}_chunk_{i}" for i in range(len(chunks))],
-                                    metadatas=[{"source": uploaded_file.name, "chunk": i} for i in range(len(chunks))]
-                                )
-                                total_chunks += len(chunks)
-                                st.success(f"✓ Added {len(chunks)} chunks from {uploaded_file.name}")
-
-                        if total_chunks > 0:
-                            st.balloons()
-                            st.rerun()
-
-                    except Exception as e:
-                        st.error(f"Error adding files: {e}")
-
-        st.markdown("---")
-
-        # ========================================
-        # STEP 3: Manage Collections
-        # ========================================
-        with st.expander("🗑️ Delete Course", expanded=False):
-            st.warning("**Warning:** This permanently deletes all materials in the selected course.")
-            if all_collections:
-                delete_target = st.selectbox(
-                    "Course to delete",
-                    collection_names,
-                    key="delete_collection_selector"
+            # Create new collection option
+            with st.expander("➕ Create New Course", expanded=len(all_collections) == 0):
+                new_name = st.text_input(
+                    "Course name",
+                    placeholder="e.g., PSYC101, Biology 200, History Fall 2024",
+                    key="new_collection_name"
                 )
-                if st.button(f"🗑️ Delete {delete_target}", type="secondary"):
-                    try:
-                        import chromadb
-                        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-                        internal_name = get_rag_collection_name(delete_target)
-                        client.delete_collection(internal_name)
-                        # Reset selection if we deleted the selected one
-                        if st.session_state.selected_rag_collection == delete_target:
-                            remaining = [c for c in collection_names if c != delete_target]
-                            st.session_state.selected_rag_collection = remaining[0] if remaining else DEFAULT_COLLECTION_NAME
-                        st.success(f"Deleted: {delete_target}")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+                if st.button("Create Course", type="primary", disabled=not new_name):
+                    if new_name:
+                        try:
+                            import chromadb
+                            client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+                            internal_name = get_rag_collection_name(new_name)
+                            client.get_or_create_collection(name=internal_name)
+                            st.session_state.selected_rag_collection = new_name
+                            st.success(f"✓ Created course: {new_name}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error creating course: {e}")
 
-    with col2:
-        st.markdown("### 🤖 AI Models")
+            # Select existing collection
+            if all_collections:
+                # Find current selection index
+                current_idx = 0
+                for i, name in enumerate(collection_names):
+                    if name == st.session_state.selected_rag_collection:
+                        current_idx = i
+                        break
 
-        # Show available models
-        st.caption("Currently selected model:")
-        st.info(f"**{st.session_state.model}**")
+                selected = st.selectbox(
+                    "Select course",
+                    collection_names,
+                    index=current_idx,
+                    key="collection_selector"
+                )
 
-        # Model status check - only show INSTALLED models
-        try:
-            import ollama
-            models_response = ollama.list()
+                if selected != st.session_state.selected_rag_collection:
+                    st.session_state.selected_rag_collection = selected
+                    st.rerun()
 
-            # Get installed model names (handle both old and new Ollama API formats)
-            installed = []
-            for m in models_response.get('models', []):
-                name = m.get('name', '') or m.get('model', '')
-                if name:
-                    installed.append(name.lower())
+                # Show selected collection info
+                selected_coll = next((c for c in all_collections if c['display_name'] == selected), None)
+                if selected_coll:
+                    st.success(f"✓ **{selected}** — {selected_coll['count']} chunks loaded")
 
-            # Filter AVAILABLE_MODELS to only show installed ones
-            installed_models = {}
-            for model_name, description in AVAILABLE_MODELS.items():
-                base_name = model_name.split(':')[0].lower()
-                # Check if base name or full name matches any installed model
-                is_installed = any(base_name in m or model_name.lower() in m for m in installed)
-                if is_installed:
-                    installed_models[model_name] = description
-
-            if installed_models:
-                st.caption("Installed models:")
-                for model_name, description in installed_models.items():
-                    st.success(f"✓ {model_name}")
-                    st.caption(f"  {description}")
+                    # Show files in collection
+                    files = get_collection_files(selected_coll['name'])
+                    if files:
+                        with st.expander(f"📁 Files in {selected} ({len(files)} files)"):
+                            for filename, chunk_count in files.items():
+                                st.text(f"  • {filename} ({chunk_count} chunks)")
             else:
-                st.error("No compatible AI models installed")
-                st.info("Run: `ollama pull llama3:8b`")
+                st.info("No courses created yet. Create one above to get started.")
 
-            # Show note about adding more models
-            st.caption("To add more models, see README or run `ollama pull <model>`")
+            st.markdown("---")
 
-        except Exception as e:
-            st.error(f"Cannot connect to Ollama: {e}")
-            st.info("Make sure Ollama is running: `ollama serve`")
+            # ========================================
+            # STEP 2: Upload Materials
+            # ========================================
+            st.markdown("#### Step 2: Upload Materials")
+            st.caption("Add lecture notes, textbook excerpts, or study guides to the selected course.")
 
-        st.markdown("---")
-        st.markdown("### 📁 Output Locations")
-        st.caption("Generated files are saved to:")
-        st.code(f"""
-Raw attempts: output/raw_attempts/
-Reports:      output/reports/
-Dashboards:   output/dashboards/
-        """)
+            if not all_collections:
+                st.warning("Create a course first before uploading materials.")
+            else:
+                uploaded_files = st.file_uploader(
+                    f"Upload to: **{st.session_state.selected_rag_collection}**",
+                    type=['txt', 'md', 'pdf'],
+                    accept_multiple_files=True,
+                    help="Supported formats: .txt, .md, .pdf",
+                    key="rag_file_uploader_settings"
+                )
 
-        st.markdown("---")
-        st.markdown("### 🔄 Scan Mode")
+                if uploaded_files:
+                    if st.button("📥 Add to Course", type="primary", key="add_to_collection_btn"):
+                        try:
+                            import chromadb
+                            client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+                            internal_name = get_rag_collection_name(st.session_state.selected_rag_collection)
+                            collection = client.get_or_create_collection(name=internal_name)
 
-        current_mode = "Full Scan (2 scans)" if st.session_state.use_rag_mode else "Basic Scan (1 scan)"
-        st.caption(f"Current mode: **{current_mode}**")
+                            total_chunks = 0
+                            for uploaded_file in uploaded_files:
+                                content = ""
+                                if uploaded_file.name.endswith('.pdf'):
+                                    try:
+                                        from pypdf import PdfReader
+                                        import io
+                                        reader = PdfReader(io.BytesIO(uploaded_file.read()))
+                                        content = "\n".join([page.extract_text() for page in reader.pages])
+                                    except ImportError:
+                                        st.warning("PDF support requires: pip install pypdf")
+                                        continue
+                                else:
+                                    content = uploaded_file.read().decode('utf-8', errors='ignore')
 
-        if st.session_state.use_rag_mode:
-            st.info("Full Scan mode compares AI performance with and without course materials.")
-            if st.button("Switch to Basic Scan", use_container_width=True):
-                st.session_state.use_rag_mode = False
+                                if not content.strip():
+                                    st.warning(f"Skipped {uploaded_file.name} (empty or unreadable)")
+                                    continue
+
+                                # Chunk the content
+                                chunk_size, overlap = 1000, 200
+                                chunks = []
+                                start = 0
+                                while start < len(content):
+                                    chunk = content[start:start + chunk_size]
+                                    if chunk.strip():
+                                        chunks.append(chunk)
+                                    start += chunk_size - overlap
+
+                                if chunks:
+                                    base_id = f"{st.session_state.selected_rag_collection}_{uploaded_file.name}".replace(" ", "_")[:50]
+                                    collection.add(
+                                        documents=chunks,
+                                        ids=[f"{base_id}_chunk_{i}" for i in range(len(chunks))],
+                                        metadatas=[{"source": uploaded_file.name, "chunk": i} for i in range(len(chunks))]
+                                    )
+                                    total_chunks += len(chunks)
+                                    st.success(f"✓ Added {len(chunks)} chunks from {uploaded_file.name}")
+
+                            if total_chunks > 0:
+                                st.balloons()
+                                st.rerun()
+
+                        except Exception as e:
+                            st.error(f"Error adding files: {e}")
+
+            st.markdown("---")
+
+            # ========================================
+            # STEP 3: Manage Collections
+            # ========================================
+            with st.expander("🗑️ Delete Course", expanded=False):
+                st.warning("**Warning:** This permanently deletes all materials in the selected course.")
+                if all_collections:
+                    delete_target = st.selectbox(
+                        "Course to delete",
+                        collection_names,
+                        key="delete_collection_selector"
+                    )
+                    if st.button(f"🗑️ Delete {delete_target}", type="secondary"):
+                        try:
+                            import chromadb
+                            client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+                            internal_name = get_rag_collection_name(delete_target)
+                            client.delete_collection(internal_name)
+                            # Reset selection if we deleted the selected one
+                            if st.session_state.selected_rag_collection == delete_target:
+                                remaining = [c for c in collection_names if c != delete_target]
+                                st.session_state.selected_rag_collection = remaining[0] if remaining else DEFAULT_COLLECTION_NAME
+                            st.success(f"Deleted: {delete_target}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+
+        with col2:
+            st.markdown("### 🤖 AI Models")
+
+            # Show available models
+            st.caption("Currently selected model:")
+            st.info(f"**{st.session_state.model}**")
+
+            # Model status check - only show INSTALLED models
+            try:
+                import ollama
+                models_response = ollama.list()
+
+                # Get installed model names (handle both old and new Ollama API formats)
+                installed = []
+                for m in models_response.get('models', []):
+                    name = m.get('name', '') or m.get('model', '')
+                    if name:
+                        installed.append(name.lower())
+
+                # Filter AVAILABLE_MODELS to only show installed ones
+                installed_models = {}
+                for model_name, description in AVAILABLE_MODELS.items():
+                    base_name = model_name.split(':')[0].lower()
+                    # Check if base name or full name matches any installed model
+                    is_installed = any(base_name in m or model_name.lower() in m for m in installed)
+                    if is_installed:
+                        installed_models[model_name] = description
+
+                if installed_models:
+                    st.caption("Installed models:")
+                    for model_name, description in installed_models.items():
+                        st.success(f"✓ {model_name}")
+                        st.caption(f"  {description}")
+                else:
+                    st.error("No compatible AI models installed")
+                    st.info("Run: `ollama pull llama3:8b`")
+
+                # Show note about adding more models
+                st.caption("To add more models, see README or run `ollama pull <model>`")
+
+            except Exception as e:
+                st.error(f"Cannot connect to Ollama: {e}")
+                st.info("Make sure Ollama is running: `ollama serve`")
+
+            st.markdown("---")
+            st.markdown("### 📁 Output Locations")
+            st.caption("Generated files are saved to:")
+            st.code(f"""
+    Raw attempts: output/raw_attempts/
+    Reports:      output/reports/
+    Dashboards:   output/dashboards/
+            """)
+
+            st.markdown("---")
+            st.markdown("### 🔄 Scan Mode")
+
+            current_mode = "Full Scan (2 scans)" if st.session_state.use_rag_mode else "Basic Scan (1 scan)"
+            st.caption(f"Current mode: **{current_mode}**")
+
+            if st.session_state.use_rag_mode:
+                st.info("Full Scan mode compares AI performance with and without course materials.")
+                if st.button("Switch to Basic Scan", use_container_width=True):
+                    st.session_state.use_rag_mode = False
+                    st.rerun()
+            else:
+                st.info("Basic Scan mode runs one quick test with general knowledge only.")
+                if st.button("Switch to Full Scan", type="primary", use_container_width=True):
+                    st.session_state.use_rag_mode = True
+                    st.rerun()
+
+            st.markdown("---")
+            st.markdown("### 🎓 Help & Onboarding")
+            if st.button("📖 Show Welcome Screen Again"):
+                st.session_state.onboarding_complete = False
+                st.session_state.onboarding_step = 1
                 st.rerun()
-        else:
-            st.info("Basic Scan mode runs one quick test with general knowledge only.")
-            if st.button("Switch to Full Scan", type="primary", use_container_width=True):
-                st.session_state.use_rag_mode = True
-                st.rerun()
-
-        st.markdown("---")
-        st.markdown("### 🎓 Help & Onboarding")
-        if st.button("📖 Show Welcome Screen Again"):
-            st.session_state.onboarding_complete = False
-            st.session_state.onboarding_step = 1
-            st.rerun()
 
 # Footer
 st.divider()
