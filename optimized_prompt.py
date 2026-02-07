@@ -177,6 +177,11 @@ if __name__ == "__main__":
     except ImportError:
         print("pip install ollama")
         sys.exit(1)
+
+    try:
+        from config import DEFAULT_MODEL
+    except ImportError:
+        DEFAULT_MODEL = "llama3:8b"
     
     # Test questions
     TEST_QUESTIONS = [
@@ -242,7 +247,7 @@ if __name__ == "__main__":
         }
     ]
     
-    def test_prompt(prompt_fn, model="llama3:8b"):
+    def test_prompt(prompt_fn, model=DEFAULT_MODEL):
         print(f"\nTesting {prompt_fn.__name__} with {model}")
         print("="*60)
         
@@ -270,7 +275,7 @@ if __name__ == "__main__":
         print(f"\nAccuracy: {correct}/5 ({correct/5*100}%)")
         return correct
     
-    model = sys.argv[1] if len(sys.argv) > 1 else "llama3:8b"
+    model = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MODEL
     
     print("\n" + "="*60)
     print("OPTIMIZED PROMPT COMPARISON")

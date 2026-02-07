@@ -124,7 +124,7 @@ defaults = {
     'with_rag_score': None,
     'activity': [],
     'chrome_ok': False,
-    'model': 'llama3:8b',
+    'model': DEFAULT_MODEL,
     'num_samples': 1,
     'onboarding_complete': False,
     'test_question_result': None,
@@ -2486,7 +2486,7 @@ if tab5 is not None:
             test_cols = st.columns(4)
             with test_cols[0]:
                 # Get installed models for test dropdown
-                test_model_options = ['llama3:8b', 'mistral', 'gemma2:9b']
+                test_model_options = list(AVAILABLE_MODELS.keys())
                 try:
                     import ollama as ollama_check
                     models_resp = ollama_check.list()
@@ -2498,7 +2498,7 @@ if tab5 is not None:
                     # Filter to only installed models
                     test_model_options = [m for m in test_model_options if any(m.split(':')[0].lower() in inst or m.lower() in inst for inst in installed)]
                     if not test_model_options:
-                        test_model_options = ['llama3:8b']  # Fallback
+                        test_model_options = [DEFAULT_MODEL]  # Fallback
                 except:
                     pass
 

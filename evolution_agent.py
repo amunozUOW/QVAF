@@ -47,9 +47,13 @@ except ImportError:
 # CONFIGURATION
 # ============================================
 
-DEFAULT_MODEL = "llama3:8b"
-EVOLUTION_MODEL = "llama3:8b"  # Model for rewriting
-VALIDATION_MODEL = "llama3:8b"  # Model for validation checks
+try:
+    from config import DEFAULT_MODEL
+except ImportError:
+    DEFAULT_MODEL = "llama3:8b"
+
+EVOLUTION_MODEL = DEFAULT_MODEL  # Model for rewriting
+VALIDATION_MODEL = DEFAULT_MODEL  # Model for validation checks
 
 # Validation thresholds
 MIN_VALIDITY_SCORE = 4  # Out of 5

@@ -1,6 +1,11 @@
 import chromadb
 import ollama
 
+try:
+    from config import DEFAULT_MODEL
+except ImportError:
+    DEFAULT_MODEL = "llama3:8b"
+
 # Load the database
 client = chromadb.PersistentClient(path="./chroma_db")
 collection = client.get_collection("unit_materials")
@@ -12,19 +17,21 @@ def search(query, n_results=3):
     )
     return results['documents'][0]
 
-def extract_search_terms(question):
+def extract_search_terms(question, model=None):
     """Ask the LLM to identify key concepts to search for"""
-    response = ollama.chat(model='mistral', messages=[
+    model = model or DEFAULT_MODEL
+    response = ollama.chat(model=model, messages=[
         {'role': 'user', 'content': f'What are the key operations management concepts in this question? List only the technical terms, separated by commas. No explanation.\n\nQuestion: {question}'}
     ])
     return response['message']['content']
 
-def answer_question(question):
-    search_terms = extract_search_terms(question)
+def answer_question(question, model=None):
+    model = model or DEFAULT_MODEL
+    search_terms = extract_search_terms(question, model=model)
     chunks = search(search_terms, n_results=3)
     context = "\n\n---\n\n".join(chunks)
-    
-    response = ollama.chat(model='mistral', messages=[
+
+    response = ollama.chat(model=model, messages=[
         {'role': 'system', 'content': 'You are a student taking a quiz. Use the provided unit materials to answer questions.'},
         {'role': 'user', 'content': f'''UNIT MATERIALS:
 {context}

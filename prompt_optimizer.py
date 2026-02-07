@@ -42,6 +42,11 @@ except ImportError:
     print("ERROR: ollama not installed. Run: pip install ollama")
     sys.exit(1)
 
+try:
+    from config import DEFAULT_MODEL
+except ImportError:
+    DEFAULT_MODEL = "llama3:8b"
+
 
 # ============================================
 # EXAMPLE QUESTIONS (Discipline-Agnostic)
@@ -315,8 +320,9 @@ REASONING: [brief explanation]"""
 # TESTING FUNCTIONS
 # ============================================
 
-def call_llm(prompt: str, model: str = "mistral") -> Tuple[str, int, str]:
+def call_llm(prompt: str, model: str = None) -> Tuple[str, int, str]:
     """Call LLM and parse response"""
+    model = model or DEFAULT_MODEL
     try:
         response = ollama.chat(
             model=model,
@@ -348,11 +354,12 @@ def test_prompt_strategy(
     strategy_name: str,
     strategy_fn: callable,
     questions: List[Dict],
-    model: str = "mistral",
+    model: str = None,
     verbose: bool = True
 ) -> Dict:
     """Test a prompt strategy against all questions"""
-    
+    model = model or DEFAULT_MODEL
+
     results = {
         'strategy': strategy_name,
         'model': model,
@@ -408,10 +415,11 @@ def test_prompt_strategy(
 
 def compare_all_strategies(
     questions: List[Dict],
-    model: str = "mistral",
+    model: str = None,
     strategies: Optional[List[str]] = None
 ) -> List[Dict]:
     """Compare all prompt strategies"""
+    model = model or DEFAULT_MODEL
     
     all_strategies = get_prompt_strategies()
     
@@ -441,9 +449,10 @@ def compare_all_strategies(
     return results
 
 
-def detailed_comparison(questions: List[Dict], model: str = "mistral"):
+def detailed_comparison(questions: List[Dict], model: str = None):
     """Show detailed side-by-side comparison for each question"""
-    
+    model = model or DEFAULT_MODEL
+
     strategies = get_prompt_strategies()
     
     print("\n" + "="*70)
@@ -530,8 +539,8 @@ The tool no longer includes hardcoded domain-specific questions.
                        help='JSON file containing test questions (REQUIRED for testing)')
     parser.add_argument('--prompt', type=str, 
                        help='Test specific prompt strategy')
-    parser.add_argument('--model', type=str, default='mistral',
-                       help='Ollama model to use (default: mistral)')
+    parser.add_argument('--model', type=str, default=DEFAULT_MODEL,
+                       help=f'Ollama model to use (default: {DEFAULT_MODEL})')
     parser.add_argument('--detailed', action='store_true',
                        help='Show detailed question-by-question comparison')
     parser.add_argument('--list', action='store_true',

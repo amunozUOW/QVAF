@@ -32,6 +32,11 @@ try:
 except ImportError:
     ollama = None
 
+try:
+    from config import DEFAULT_MODEL
+except ImportError:
+    DEFAULT_MODEL = "llama3:8b"
+
 
 def ask_question_single(
     question: str,
@@ -283,7 +288,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Test multi-sample question answering")
-    parser.add_argument("--model", default="llama3:8b", help="Ollama model")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model")
     parser.add_argument("--samples", type=int, default=10, help="Number of samples")
     args = parser.parse_args()
     
