@@ -297,7 +297,7 @@ def run_quiz(use_rag=False):
 
             elif "Answer:" in progress_msg:
                 # Got an answer with confidence
-                match = re.search(r'Answer:\s*([A-E]).*confidence:\s*(\d+)', progress_msg)
+                match = re.search(r'Answer:\s*([A-Z]).*confidence:\s*(\d+)', progress_msg)
                 if match:
                     ans, conf = match.groups()
                     if int(conf) >= 80:
@@ -2256,7 +2256,7 @@ def test_single_question(question: str, options: dict, correct_answer: str, mode
             pass
     
     # Use the optimized v4 prompt
-    prompt = f"""TASK: Answer this multiple choice question correctly.
+    prompt = f"""TASK: Answer this question correctly.
 
 QUESTION: {question}
 
@@ -2265,11 +2265,11 @@ OPTIONS:
 {rag_context}
 ANALYSIS STEPS:
 
-1. QUESTION TYPE: Is this testing recall, conceptual understanding, calculation, or application?
+1. QUESTION TYPE: Which of the following categories best describes this type of question: content recall, routine application, conceptual understanding, analytical reasoning, or strategic integration? Choose one category only.
 
 2. KEY INSIGHT: What core concept or distinction is being tested here?
 
-3. EVALUATE OPTIONS:
+3. EVALUATE OPTIONS (if more than five options are present, evaluate them all):
    A: [KEEP/ELIMINATE] - why?
    B: [KEEP/ELIMINATE] - why?
    C: [KEEP/ELIMINATE] - why?
@@ -2280,12 +2280,14 @@ ANALYSIS STEPS:
 
 5. FINAL SELECTION: From options marked KEEP, select the single best answer.
 
+6. CONFIDENCE: Rate how confident you are that your final selection is the correct answer. Rate your confidence in this answer on a scale of 0-100.
+
 === REQUIRED OUTPUT FORMAT ===
 After your analysis, you MUST write these three lines:
 
-ANSWER: [write ONE letter: A, B, C, D, or E]
+ANSWER: [write ONE letter: A, B, C, D, or E] (if there are more than five options choose the correct answer from all the options)
 CONFIDENCE: [write a number from 0 to 100]
-REASONING: [write one sentence explaining why]
+REASONING: [write 1-2 sentence explaining why]
 
 Do not write anything after the REASONING line.
 

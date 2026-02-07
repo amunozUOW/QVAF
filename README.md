@@ -16,7 +16,7 @@ QVAF helps you understand which quiz questions are vulnerable to students simply
    - **Baseline**: AI answers using only general knowledge
    - **With course materials**: AI answers with access to your lecture notes/readings, uses Retreival Augmented Generation (RAG)
 
-2. **Measuring AI performance**:
+2. **Measuring AI performance across a range of possible multiple choice questions (including questions with images embedded, tables, charts, and more than 5 answer options)**:
    - Which questions does AI get right?
    - How confident is it?
    - How consistently does it answer?

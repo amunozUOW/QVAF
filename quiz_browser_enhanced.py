@@ -282,9 +282,9 @@ def interpret_image_with_llava(image_path, question_context=""):
         with open(image_path, 'rb') as f:
             image_data = base64.b64encode(f.read()).decode('utf-8')
         
-        prompt = f"""Analyze this image carefully. It's part of a quiz question.
+        prompt = f"""Analyze this image carefully. It's required to understand the content of the quiz question (and maybe other questions that refer to this image). Be as thorough as possible, as this may be critical for answering the quiz question.
 {f"Question context: {question_context}" if question_context else ""}
-Extract ALL text, numbers, and data visible. If it's a table, reproduce it. If it's a chart, describe the data."""
+Extract ALL text, numbers, and data visible. If it's a table, reproduce it. If it's a chart, describe the data. If it's an image, describe it in detail. """
 
         response = ollama.chat(
             model=OLLAMA_VISION_MODEL,
@@ -392,6 +392,10 @@ def build_prompt(question, options, rag_context="", image_context="", link_conte
     
     context_block = "\n\n".join(context_parts)
     
+    # Build the list of valid option letters from the actual options provided
+    option_letters = sorted(options.keys())
+    letters_str = ", ".join(option_letters) if option_letters else "A, B, C, D, or E"
+
     return f"""Answer this multiple choice question.
 
 QUESTION: {question}
@@ -401,14 +405,14 @@ OPTIONS:
 
 {context_block}
 
-First, state your answer as a single letter. Then explain briefly.
+First, state your answer as a single choice. Then quantify how confident you are that the choice is the correct answer to the question. Please explain briefly your reasoning. Be concise but thorough, as the question may be tricky and require careful thought.
 
 Format your response EXACTLY like this:
 ANSWER: X
 CONFIDENCE: N
 REASONING: Your explanation here
 
-where X is the letter (A, B, C, D, or E) and N is a number from 0 to 100.
+where X is one of the options ({letters_str}) and N is a number from 0 to 100.
 
 Your response:"""
 
@@ -424,7 +428,7 @@ def parse_llm_response(text):
     
     # Fallback answer extraction
     if not answer:
-        first_letter = re.search(r'^([A-E])\b', text.strip())
+        first_letter = re.search(r'^([A-Z])\b', text.strip())
         if first_letter:
             answer = first_letter.group(1)
         else:
@@ -700,7 +704,7 @@ def scrape_results(page, debug=False):
             feedback = q_elem.query_selector('.rightanswer')
             if feedback:
                 text = feedback.inner_text()
-                match = re.search(r'correct answer is[:\s]*([A-E])', text, re.IGNORECASE)
+                match = re.search(r'correct answer is[:\s]*([A-Z])', text, re.IGNORECASE)
                 if match:
                     correct_answer = match.group(1).upper()
             

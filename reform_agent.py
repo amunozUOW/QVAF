@@ -45,7 +45,7 @@ teqsa_guidance = """
 TEQSA 2025 ASSESSMENT REFORM GUIDANCE
 
 Key principle: "Design assessments where gen AI use is irrelevant to the 
-demonstration of learning outcomes."
+demonstration of learning outcomes. This means designing questions that require higher-order thinking, application, and synthesis, rather than simple recall or pattern recognition. This also means suggesting rewrites to questions that either lower LLM confidence in the answer or consistently drive the LLM to select an incorrect answer. It is imperative that the suggested rewrites do not lead to questions that are nonsensical or intentionally select incorrect answers." 
 
 This analysis helps educators understand AI performance patterns on their 
 questions. The SME interprets these patterns and decides what action to take.
@@ -171,7 +171,7 @@ def get_pattern_description(pattern: str) -> str:
     descriptions = {
         "CORRECT_BOTH": "AI answered correctly in both conditions (with and without course materials)",
         "CORRECT_RAG_ONLY": "AI answered correctly only when provided with course materials",
-        "CORRECT_BASELINE_ONLY": "AI answered correctly only without course materials (anomalous pattern)",
+        "CORRECT_BASELINE_ONLY": "AI answered correctly only without course materials",
         "INCORRECT_BOTH": "AI answered incorrectly in both conditions",
         "UNKNOWN": "Unable to determine correctness pattern"
     }
@@ -335,6 +335,7 @@ Based on this information, provide:
 
 1. PERFORMANCE ANALYSIS (2-3 sentences):
    - What does the AI performance suggest about this question?
+   - Was the reasoning used by the AI sufficient to arrive at the correct answer, or did it rely on patterns that may not reflect true understanding?
    - How might the question type ({question_type}) relate to AI performance?
 
 2. CONSIDERATIONS FOR SME:
@@ -380,6 +381,7 @@ Based on this information, provide:
 
 1. PERFORMANCE ANALYSIS (2-3 sentences):
    - What does the AI performance pattern suggest about this question?
+   - Was the reasoning used by the AI sufficient to arrive at the correct answer, or did it rely on patterns that may not reflect true understanding?
    - How might the question type ({question_type}) relate to AI performance?
 
 2. CONSIDERATIONS FOR SME:
