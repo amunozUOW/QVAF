@@ -1465,28 +1465,43 @@ elif nav_target == 'results' and 'Results' in labels:
 # Create tabs
 tab_objs = st.tabs(labels)
 
-# Use JavaScript to click the target tab if navigation was requested
-# The JS runs client-side and clicks the tab, which may trigger a Streamlit rerun.
+# Use JavaScript to click the target tab if navigation was requested.
+# The JS runs client-side inside a components.html iframe and accesses the parent
+# Streamlit document to find and click the correct tab element.
 # We use a two-phase approach: on the first render we inject JS and set _nav_pending,
-# on the next render we see _nav_pending and clear navigate_to.
+# on the next render (after the JS-triggered rerun) we clear navigate_to.
 if nav_target and target_tab_index > 0:
-    js_code = f"""
+    # Embed a unique counter in the JS so the HTML content changes each time.
+    # This prevents Streamlit from serving a cached iframe and ensures the JS re-executes.
+    _nav_counter = st.session_state.get('_nav_counter', 0) + 1
+    st.session_state._nav_counter = _nav_counter
+    _nav_js = f"""
+    <!-- nav_id={_nav_counter} -->
     <script>
-        // Wait for tabs to render, then click the target tab
-        function clickTab() {{
-            const tabs = window.parent.document.querySelectorAll('[data-baseweb="tab"]');
-            if (tabs && tabs.length > {target_tab_index}) {{
-                tabs[{target_tab_index}].click();
+        (function() {{
+            var target = {target_tab_index};
+            var doc = window.parent.document;
+
+            function clickTab() {{
+                var tabs = doc.querySelectorAll('[data-baseweb="tab"]');
+                if (tabs && tabs.length > target) {{
+                    tabs[target].click();
+                    return true;
+                }}
+                return false;
             }}
-        }}
-        // Try multiple times to ensure tabs are rendered
-        setTimeout(clickTab, 100);
-        setTimeout(clickTab, 300);
-        setTimeout(clickTab, 600);
-        setTimeout(clickTab, 1000);
+
+            // Try immediately, then retry with increasing delays
+            if (!clickTab()) {{
+                var delays = [50, 100, 200, 400, 700, 1000, 1500, 2000];
+                delays.forEach(function(d) {{
+                    setTimeout(clickTab, d);
+                }});
+            }}
+        }})();
     </script>
     """
-    components.html(js_code, height=0)
+    components.html(_nav_js, height=0)
     # Mark that we've injected JS — don't clear navigate_to yet
     st.session_state._nav_pending = True
 
