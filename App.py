@@ -130,6 +130,7 @@ defaults = {
     'test_question_result': None,
     'selected_rag_collection': DEFAULT_COLLECTION_NAME,  # Currently selected RAG collection
     'use_rag_mode': None,  # None = not decided, True = use RAG, False = skip RAG (single scan mode)
+    'test_question_mode': False,  # True when user selected "Test a Single Question"
     'onboarding_step': 1,  # Track onboarding progress: 1=welcome, 2=rag decision
     'is_scanning': False,  # Track if a scan is currently running
     'is_testing': False,  # Track if a test question is running
@@ -663,79 +664,266 @@ def run_analysis(merged_file):
     return report, None
 
 
+# ========================================
+# Helper Functions for Course Materials
+# ========================================
+
+def get_all_courses():
+    """Get all course material collections from the database."""
+    courses = []
+    try:
+        import chromadb
+        if os.path.exists(str(CHROMA_DB_PATH)):
+            client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+            for coll in client.list_collections():
+                if coll.name.startswith(RAG_COLLECTION_PREFIX):
+                    display_name = get_display_name(coll.name)
+                    # Get file count (unique source files)
+                    files = get_course_files(coll.name)
+                    file_count = len(files)
+                    segment_count = coll.count()
+                    courses.append({
+                        'name': coll.name,
+                        'display_name': display_name,
+                        'file_count': file_count,
+                        'segment_count': segment_count
+                    })
+    except:
+        pass
+    return courses
+
+# Keep old function name as alias for compatibility
+get_all_rag_collections = get_all_courses
+
+def get_course_files(collection_name):
+    """Get list of source files in a course with their segment counts."""
+    files = {}
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+        coll = client.get_collection(collection_name)
+        results = coll.get(include=['metadatas'])
+        for meta in results.get('metadatas', []):
+            source = meta.get('source', 'Unknown')
+            files[source] = files.get(source, 0) + 1
+    except:
+        pass
+    return files
+
+# Keep old function name as alias for compatibility
+get_collection_files = get_course_files
+
+def delete_file_from_course(collection_name, filename):
+    """Delete all segments from a specific file in a course."""
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+        coll = client.get_collection(collection_name)
+        # Get all IDs where source matches the filename
+        results = coll.get(include=['metadatas'])
+        ids_to_delete = []
+        for i, meta in enumerate(results.get('metadatas', [])):
+            if meta.get('source') == filename:
+                ids_to_delete.append(results['ids'][i])
+        if ids_to_delete:
+            coll.delete(ids=ids_to_delete)
+            return len(ids_to_delete)
+        return 0
+    except Exception as e:
+        return -1
+
+def clear_course_materials(collection_name):
+    """Delete all materials from a course."""
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+        # Delete and recreate the collection to clear it
+        client.delete_collection(collection_name)
+        client.get_or_create_collection(name=collection_name)
+        return True
+    except Exception as e:
+        return False
+
+def process_uploaded_files(uploaded_files, collection_name, progress_container):
+    """Process uploaded files with progress feedback. Returns total segments added."""
+    import chromadb
+    client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+    coll = client.get_or_create_collection(name=collection_name)
+
+    total_segments = 0
+    total_files = len(uploaded_files)
+
+    for file_idx, uploaded_file in enumerate(uploaded_files):
+        # Update progress
+        progress_container.markdown(f"**Processing file {file_idx + 1} of {total_files}:** {uploaded_file.name}")
+
+        content = ""
+        if uploaded_file.name.endswith('.pdf'):
+            try:
+                from pypdf import PdfReader
+                import io
+                pdf_bytes = uploaded_file.read()
+                reader = PdfReader(io.BytesIO(pdf_bytes))
+                total_pages = len(reader.pages)
+
+                page_texts = []
+                for page_idx, page in enumerate(reader.pages):
+                    progress_container.markdown(f"**Processing file {file_idx + 1} of {total_files}:** {uploaded_file.name}  \nPage {page_idx + 1} of {total_pages}")
+                    page_texts.append(page.extract_text() or "")
+                content = "\n".join(page_texts)
+            except ImportError:
+                progress_container.warning(f"Skipped {uploaded_file.name} - PDF support requires: pip install pypdf")
+                continue
+        else:
+            content = uploaded_file.read().decode('utf-8', errors='ignore')
+
+        if not content.strip():
+            continue
+
+        # Chunk content
+        chunk_size, overlap = 1000, 200
+        chunks = []
+        start = 0
+        while start < len(content):
+            chunk = content[start:start + chunk_size]
+            if chunk.strip():
+                chunks.append(chunk)
+            start += chunk_size - overlap
+
+        if chunks:
+            display_name = get_display_name(collection_name)
+            base_id = f"{display_name}_{uploaded_file.name}".replace(" ", "_")[:50]
+            coll.add(
+                documents=chunks,
+                ids=[f"{base_id}_chunk_{i}" for i in range(len(chunks))],
+                metadatas=[{"source": uploaded_file.name, "chunk": i} for i in range(len(chunks))]
+            )
+            total_segments += len(chunks)
+
+    return total_segments
+
+
 # ============================================
 # SIDEBAR
 # ============================================
 
 with st.sidebar:
-    # Status section - compact
+
+    # Compact spacing for the entire sidebar
+    st.markdown("""<style>
+    section[data-testid="stSidebar"] .block-container { padding-top: 0.5rem; }
+    section[data-testid="stSidebar"] .stMarkdown p { margin-bottom: 0; line-height: 1.3; }
+    section[data-testid="stSidebar"] .stAlert { padding: 0.4rem 0.75rem; margin-bottom: 0.25rem; }
+    section[data-testid="stSidebar"] .stCaption { margin-bottom: 0.1rem; }
+    </style>""", unsafe_allow_html=True)
+
+    # ── SYSTEM STATUS ──
+    st.markdown("**SYSTEM STATUS**")
+
     text_model_ok, vision_ok = check_ollama()
 
+    # 1. AI status
     if text_model_ok:
-        st.success("AI Models: Ready")
+        st.success(f"AI Ready: {st.session_state.model}")
     else:
-        st.error("AI not available")
-        st.caption("`ollama pull llama3:8b`")
-        if st.button("🔄 Refresh", key="sidebar_refresh_ai"):
+        st.error("AI Models Missing")
+        st.caption("Run: `ollama pull llama3:8b`")
+        if st.button("Refresh", key="sidebar_refresh_ai"):
             check_ollama.clear()
             st.rerun()
 
+    # 2. Workflow status
+    workflow = st.session_state.use_rag_mode
+    if st.session_state.get('test_question_mode', False) and workflow is None:
+        st.info("Workflow: Test a Single Question")
+    elif workflow is None:
+        st.info("Workflow: None selected")
+    elif workflow:
+        st.info("Workflow: Complete Assessment")
+    else:
+        st.info("Workflow: Baseline Scan")
+
+    # 3. Browser status
     if st.session_state.chrome_ok:
         st.success("Browser: Connected")
     else:
-        st.info("Browser: Not connected")
+        st.warning("Browser: Not connected")
+        if workflow is not None:
+            if st.button("Connect to Browser", use_container_width=True, key="sidebar_connect_browser"):
+                with st.spinner("Connecting..."):
+                    ok, url = check_chrome()
+                if ok:
+                    st.session_state.chrome_ok = True
+                    st.rerun()
+                else:
+                    st.error("Could not connect.")
+                    with st.expander("Troubleshooting"):
+                        st.markdown("""
+**If "Start Scanner" was used to launch the app**, Chrome should connect automatically. Try clicking Connect again.
 
-    st.divider()
+**Manual setup (if Chrome wasn't started by the app):**
 
-    # Progress with visual indicator
-    st.subheader("Progress")
+macOS:
+```
+/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
+```
 
-    # Determine current step and build progress
-    if st.session_state.use_rag_mode:
-        # Full scan mode - 4 steps
-        steps = [
-            ("Connect", st.session_state.chrome_ok),
-            ("First Scan", st.session_state.no_rag_score is not None),
-            ("Second Scan", st.session_state.with_rag_score is not None),
-            ("Report", st.session_state.report_file is not None),
-        ]
-    else:
-        # Basic scan mode - 3 steps
-        steps = [
-            ("Connect", st.session_state.chrome_ok),
-            ("Scan", st.session_state.no_rag_score is not None),
-            ("Report", st.session_state.report_file is not None),
-        ]
+Windows:
+```
+"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir=%TEMP%\\chrome-debug
+```
 
-    # Find current step (first incomplete)
-    current_step = len(steps)  # All done
-    for i, (label, done) in enumerate(steps):
-        if not done:
-            current_step = i
-            break
+Then navigate to your quiz and start an attempt.
+                        """)
 
-    # Display progress with current step highlighted
-    for i, (label, done) in enumerate(steps):
-        if done:
-            st.markdown(f"✅ ~~{label}~~")
-        elif i == current_step:
-            st.markdown(f"**→ {label}**")
+    # Progress steps — only shown after a workflow is selected
+    if workflow is not None:
+        if workflow:
+            # Full scan mode - 3 steps
+            steps = [
+                ("First Scan", st.session_state.no_rag_score is not None),
+                ("Second Scan", st.session_state.with_rag_score is not None),
+                ("Report", st.session_state.report_file is not None),
+            ]
         else:
-            st.markdown(f"○ {label}")
+            # Basic scan mode - 2 steps
+            steps = [
+                ("Scan", st.session_state.no_rag_score is not None),
+                ("Report", st.session_state.report_file is not None),
+            ]
 
-    # Show completion message
-    if current_step == len(steps):
-        st.success("✓ All done!")
+        # Find current step (first incomplete)
+        current_step = len(steps)  # All done
+        for i, (label, done) in enumerate(steps):
+            if not done:
+                current_step = i
+                break
+
+        # Display progress with current step highlighted
+        for i, (label, done) in enumerate(steps):
+            if done:
+                st.markdown(f"✅ ~~{label}~~")
+            elif i == current_step:
+                st.markdown(f"**→ {label}**")
+            else:
+                st.markdown(f"○ {label}")
+
+        # Show completion message
+        if current_step == len(steps):
+            st.success("All steps complete!")
 
     st.divider()
 
-    # Model selection - collapsible when scan started
-    can_change = st.session_state.no_rag_file is None
+    # ── SETTINGS ──
+    st.markdown("**SETTINGS**")
 
-    if can_change:
-        with st.expander("AI Model", expanded=False):
+    # AI Model expander
+    can_change_model = st.session_state.no_rag_file is None
+
+    with st.expander("AI Model", expanded=False):
+        if can_change_model:
             # Get only installed models
-            sidebar_models = dict(AVAILABLE_MODELS)  # Start with all models
+            sidebar_models = dict(AVAILABLE_MODELS)
             try:
                 import ollama as ollama_sidebar
                 models_resp = ollama_sidebar.list()
@@ -776,20 +964,104 @@ with st.sidebar:
             st.session_state.num_samples = samples_selected
 
             if samples_selected == 1:
-                st.caption("Fast mode")
+                st.caption("Fast mode — 1 sample per question")
             else:
-                st.caption(f"Consistency mode: {samples_selected}x")
-    else:
-        st.caption(f"Model: {st.session_state.model}")
-        if st.session_state.num_samples > 1:
-            st.caption(f"Samples: {st.session_state.num_samples}x")
+                st.caption(f"Consistency mode — {samples_selected} samples per question")
+        else:
+            st.caption(f"Model: **{st.session_state.model}**")
+            if st.session_state.num_samples > 1:
+                st.caption(f"Samples: {st.session_state.num_samples}x")
+            st.caption("Settings locked during scan session.")
+
+    # Course Materials expander
+    with st.expander("Course Materials", expanded=False):
+        all_courses = get_all_courses()
+
+        if all_courses:
+            # Course selector
+            course_options = [c['display_name'] for c in all_courses]
+            current_idx = 0
+            for i, name in enumerate(course_options):
+                if name == st.session_state.selected_rag_collection:
+                    current_idx = i
+                    break
+            new_selection = st.selectbox(
+                "Active course:",
+                course_options,
+                index=current_idx,
+                key="sidebar_course_selector"
+            )
+            if new_selection != st.session_state.selected_rag_collection:
+                st.session_state.selected_rag_collection = new_selection
+                st.rerun()
+
+            # Show file count for selected course
+            selected_coll = next((c for c in all_courses if c['display_name'] == new_selection), None)
+            if selected_coll:
+                st.caption(f"{selected_coll['file_count']} file(s), {selected_coll['segment_count']} segments")
+        else:
+            st.caption("No courses created yet.")
+
+        # New course creation
+        new_name = st.text_input("New course name:", placeholder="e.g., PSYC101", key="sidebar_new_course_name")
+        if st.button("Create Course", key="sidebar_create_course", disabled=not new_name, use_container_width=True):
+            try:
+                import chromadb
+                client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+                internal_name = get_rag_collection_name(new_name)
+                client.get_or_create_collection(name=internal_name)
+                st.session_state.selected_rag_collection = new_name
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+        # Upload files
+        sidebar_uploaded = st.file_uploader(
+            "Upload materials",
+            type=['txt', 'md', 'pdf'],
+            accept_multiple_files=True,
+            key="sidebar_rag_upload"
+        )
+        if sidebar_uploaded:
+            target_course = st.session_state.selected_rag_collection
+            target_internal = get_rag_collection_name(target_course)
+            if st.button(f"Upload to {target_course}", type="primary", key="sidebar_upload_btn", use_container_width=True):
+                progress_area = st.empty()
+                with progress_area.container():
+                    progress_text = st.empty()
+                    total = process_uploaded_files(sidebar_uploaded, target_internal, progress_text)
+                    if total > 0:
+                        progress_text.success(f"Added {len(sidebar_uploaded)} file(s)")
+                        st.rerun()
 
     st.divider()
 
-    if st.button("🔄 Start Over", use_container_width=True):
+    # ── START OVER ──
+    if st.button("Start Over", use_container_width=True, key="sidebar_start_over"):
         for k in list(st.session_state.keys()):
             del st.session_state[k]
         st.rerun()
+
+    st.divider()
+
+    # ── HELP ──
+    st.markdown("**HELP**")
+    st.markdown(
+        '<a href="https://github.com/amunozUOW/QVAF#readme" target="_blank">Documentation</a>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        '<a href="https://github.com/amunozUOW/QVAF#troubleshooting" target="_blank">Troubleshooting</a>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        '<a href="https://github.com/amunozUOW/QVAF" target="_blank">GitHub Repository</a>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        '<a href="https://github.com/amunozUOW/QVAF/issues" target="_blank">Report an Issue</a>',
+        unsafe_allow_html=True
+    )
 
 
 # ============================================
@@ -1104,145 +1376,6 @@ def show_onboarding():
                 st.caption("Add materials first")
 
 
-# ========================================
-# Helper Functions for Course Materials
-# ========================================
-
-def get_all_courses():
-    """Get all course material collections from the database."""
-    courses = []
-    try:
-        import chromadb
-        if os.path.exists(str(CHROMA_DB_PATH)):
-            client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-            for coll in client.list_collections():
-                if coll.name.startswith(RAG_COLLECTION_PREFIX):
-                    display_name = get_display_name(coll.name)
-                    # Get file count (unique source files)
-                    files = get_course_files(coll.name)
-                    file_count = len(files)
-                    segment_count = coll.count()
-                    courses.append({
-                        'name': coll.name,
-                        'display_name': display_name,
-                        'file_count': file_count,
-                        'segment_count': segment_count
-                    })
-    except:
-        pass
-    return courses
-
-# Keep old function name as alias for compatibility
-get_all_rag_collections = get_all_courses
-
-def get_course_files(collection_name):
-    """Get list of source files in a course with their segment counts."""
-    files = {}
-    try:
-        import chromadb
-        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-        coll = client.get_collection(collection_name)
-        results = coll.get(include=['metadatas'])
-        for meta in results.get('metadatas', []):
-            source = meta.get('source', 'Unknown')
-            files[source] = files.get(source, 0) + 1
-    except:
-        pass
-    return files
-
-# Keep old function name as alias for compatibility
-get_collection_files = get_course_files
-
-def delete_file_from_course(collection_name, filename):
-    """Delete all segments from a specific file in a course."""
-    try:
-        import chromadb
-        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-        coll = client.get_collection(collection_name)
-        # Get all IDs where source matches the filename
-        results = coll.get(include=['metadatas'])
-        ids_to_delete = []
-        for i, meta in enumerate(results.get('metadatas', [])):
-            if meta.get('source') == filename:
-                ids_to_delete.append(results['ids'][i])
-        if ids_to_delete:
-            coll.delete(ids=ids_to_delete)
-            return len(ids_to_delete)
-        return 0
-    except Exception as e:
-        return -1
-
-def clear_course_materials(collection_name):
-    """Delete all materials from a course."""
-    try:
-        import chromadb
-        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-        # Delete and recreate the collection to clear it
-        client.delete_collection(collection_name)
-        client.get_or_create_collection(name=collection_name)
-        return True
-    except Exception as e:
-        return False
-
-def process_uploaded_files(uploaded_files, collection_name, progress_container):
-    """Process uploaded files with progress feedback. Returns total segments added."""
-    import chromadb
-    client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-    coll = client.get_or_create_collection(name=collection_name)
-
-    total_segments = 0
-    total_files = len(uploaded_files)
-
-    for file_idx, uploaded_file in enumerate(uploaded_files):
-        # Update progress
-        progress_container.markdown(f"**Processing file {file_idx + 1} of {total_files}:** {uploaded_file.name}")
-
-        content = ""
-        if uploaded_file.name.endswith('.pdf'):
-            try:
-                from pypdf import PdfReader
-                import io
-                pdf_bytes = uploaded_file.read()
-                reader = PdfReader(io.BytesIO(pdf_bytes))
-                total_pages = len(reader.pages)
-
-                page_texts = []
-                for page_idx, page in enumerate(reader.pages):
-                    progress_container.markdown(f"**Processing file {file_idx + 1} of {total_files}:** {uploaded_file.name}  \nPage {page_idx + 1} of {total_pages}")
-                    page_texts.append(page.extract_text() or "")
-                content = "\n".join(page_texts)
-            except ImportError:
-                progress_container.warning(f"Skipped {uploaded_file.name} - PDF support requires: pip install pypdf")
-                continue
-        else:
-            content = uploaded_file.read().decode('utf-8', errors='ignore')
-
-        if not content.strip():
-            continue
-
-        # Chunk content
-        chunk_size, overlap = 1000, 200
-        chunks = []
-        start = 0
-        while start < len(content):
-            chunk = content[start:start + chunk_size]
-            if chunk.strip():
-                chunks.append(chunk)
-            start += chunk_size - overlap
-
-        if chunks:
-            display_name = get_display_name(collection_name)
-            base_id = f"{display_name}_{uploaded_file.name}".replace(" ", "_")[:50]
-            coll.add(
-                documents=chunks,
-                ids=[f"{base_id}_chunk_{i}" for i in range(len(chunks))],
-                metadatas=[{"source": uploaded_file.name, "chunk": i} for i in range(len(chunks))]
-            )
-            total_segments += len(chunks)
-
-    return total_segments
-
-
 # Landing page - skip the old onboarding, go straight to Instructions view
 # System status will be shown in the sidebar
 if not st.session_state.onboarding_complete:
@@ -1256,9 +1389,31 @@ if not st.session_state.onboarding_complete:
 
 st.title("Quiz Vulnerability Assessment Framework")
 
+# Global CSS: single-spaced text inside expanders and compact list spacing
+st.markdown("""<style>
+/* Single-spaced text inside expandable sections */
+div[data-testid="stExpander"] .stMarkdown p {
+    margin-bottom: 0.25rem;
+    line-height: 1.4;
+}
+div[data-testid="stExpander"] .stMarkdown ol,
+div[data-testid="stExpander"] .stMarkdown ul {
+    margin-top: 0.1rem;
+    margin-bottom: 0.25rem;
+    line-height: 1.4;
+}
+div[data-testid="stExpander"] .stMarkdown li {
+    margin-bottom: 0.1rem;
+    line-height: 1.4;
+}
+</style>""", unsafe_allow_html=True)
+
 # Track workflow state - use_rag_mode determines which tabs are shown
 workflow = st.session_state.use_rag_mode
-if workflow is None:
+if st.session_state.get('test_question_mode', False) and workflow is None:
+    workflow_type = "test_question"
+    workflow_name = "Test a Single Question"
+elif workflow is None:
     workflow_type = "instructions"  # User hasn't chosen a workflow yet
     workflow_name = "Choose a Workflow"
 elif workflow is True:
@@ -1269,57 +1424,51 @@ else:
     workflow_name = "Baseline Scan (general knowledge only)"
 
 # Check for pending navigation - this happens AFTER use_rag_mode is set but BEFORE tabs are built
+# Two-phase navigation: on the first render we inject JS and mark _nav_pending.
+# On the next rerun (triggered by the JS tab click) we still honour the target,
+# then clear it so subsequent reruns go back to normal.
 nav_target = st.session_state.get('navigate_to', None)
+_was_nav_pending = st.session_state.get('_nav_pending', False)
 
-# Breadcrumb/Status Banner
-st.markdown("---")
-breadcrumb_col1, breadcrumb_col2 = st.columns([2, 1])
-with breadcrumb_col1:
-    st.caption(f"**Current Workflow:** {workflow_name}")
-with breadcrumb_col2:
-    scanning_status = ""
-    if st.session_state.is_scanning:
-        scanning_status = "🔄 Scanning..."
-    elif st.session_state.is_testing:
-        scanning_status = "🔄 Testing question..."
-    elif st.session_state.no_rag_score and not st.session_state.with_rag_score and workflow == True:
-        scanning_status = "✓ Baseline complete, ready for second scan"
-    elif st.session_state.no_rag_score and st.session_state.with_rag_score:
-        scanning_status = "✓ Both scans complete"
-    elif st.session_state.no_rag_score:
-        scanning_status = "✓ Scan complete"
-    
-    if scanning_status:
-        st.caption(scanning_status)
-
-st.markdown("---")
 
 # Build tab list dynamically based on workflow
 # Home always first, Test Question always last (for scan workflows)
 if workflow_type == "instructions":
-    # Just choosing workflow - show only these two
+    # User hasn't chosen a workflow yet - show only Home
+    labels = ["Home"]
+elif workflow_type == "test_question":
+    # Test a Single Question mode - Home + Test Question only
     labels = ["Home", "Test Question"]
 elif workflow_type == "basic_scan":
-    # Baseline Scan path: Connect required, Results after scan
-    labels = ["Home", "Connect", "Scan", "Results", "Test Question"]
+    # Baseline Scan path: Results after scan
+    labels = ["Home", "Scan", "Results", "Test Question"]
 elif workflow_type == "full_assessment":
     # Complete Assessment path: Both scans with results
-    labels = ["Home", "Connect", "First Scan", "Second Scan", "Results", "Test Question"]
+    labels = ["Home", "First Scan", "Second Scan", "Results", "Test Question"]
 else:
-    labels = ["Home", "Test Question"]
+    labels = ["Home"]
 
 # Allow navigation buttons to make a tab appear selected
 # nav_target was already read above after workflow state was set
 target_tab_index = 0  # Default to first tab
 if nav_target == 'test_question' and 'Test Question' in labels:
     target_tab_index = labels.index('Test Question')
-elif nav_target == 'connect' and 'Connect' in labels:
-    target_tab_index = labels.index('Connect')
+elif nav_target == 'scan' and 'Scan' in labels:
+    target_tab_index = labels.index('Scan')
+elif nav_target == 'first_scan' and 'First Scan' in labels:
+    target_tab_index = labels.index('First Scan')
+elif nav_target == 'second_scan' and 'Second Scan' in labels:
+    target_tab_index = labels.index('Second Scan')
+elif nav_target == 'results' and 'Results' in labels:
+    target_tab_index = labels.index('Results')
 
 # Create tabs
 tab_objs = st.tabs(labels)
 
 # Use JavaScript to click the target tab if navigation was requested
+# The JS runs client-side and clicks the tab, which may trigger a Streamlit rerun.
+# We use a two-phase approach: on the first render we inject JS and set _nav_pending,
+# on the next render we see _nav_pending and clear navigate_to.
 if nav_target and target_tab_index > 0:
     js_code = f"""
     <script>
@@ -1331,12 +1480,15 @@ if nav_target and target_tab_index > 0:
             }}
         }}
         // Try multiple times to ensure tabs are rendered
-        setTimeout(clickTab, 50);
-        setTimeout(clickTab, 150);
+        setTimeout(clickTab, 100);
         setTimeout(clickTab, 300);
+        setTimeout(clickTab, 600);
+        setTimeout(clickTab, 1000);
     </script>
     """
     components.html(js_code, height=0)
+    # Mark that we've injected JS — don't clear navigate_to yet
+    st.session_state._nav_pending = True
 
 def _get_tab_obj(name):
     try:
@@ -1345,15 +1497,21 @@ def _get_tab_obj(name):
         return None
 
 tab0 = _get_tab_obj('Home')
-tab1 = _get_tab_obj('Connect')
 tab2 = _get_tab_obj('First Scan') or _get_tab_obj('Scan')
 tab3 = _get_tab_obj('Second Scan')
 tab4 = _get_tab_obj('Results')
 tab5 = _get_tab_obj('Test Question')
-tab6 = None  # Settings tab removed - use course materials upload links instead
+tab6 = None  # Settings tab removed - use sidebar instead
 
-# Clear navigation target so subsequent interactions use normal tab order
-if 'navigate_to' in st.session_state:
+# Two-phase clearing of navigation target:
+# Phase 1 (above): JS was injected, _nav_pending is set, navigate_to is kept
+# Phase 2 (this render): If _nav_pending was True at start of this render, clear both now
+if _was_nav_pending:
+    st.session_state._nav_pending = False
+    if 'navigate_to' in st.session_state:
+        st.session_state.navigate_to = None
+elif 'navigate_to' in st.session_state and not nav_target:
+    # No navigation was requested — ensure clean state
     st.session_state.navigate_to = None
 
 
@@ -1386,9 +1544,9 @@ with tab0:
         """)
         
         if st.button("Click here to test a single question →", use_container_width=True, key="nav_test_q", type="primary"):
+            st.session_state.test_question_mode = True
             st.session_state.navigate_to = 'test_question'
-            # Test question does not require Moodle/scan mode
-            st.session_state.use_rag_mode = st.session_state.use_rag_mode
+            st.session_state._nav_pending = False  # Reset so two-phase nav starts fresh
             st.rerun()
     
     # Baseline Scan Tab
@@ -1416,7 +1574,9 @@ with tab0:
         
         if st.button("Click here to start Baseline Scan →", use_container_width=True, key="nav_baseline", type="primary"):
             st.session_state.use_rag_mode = False
-            st.session_state.navigate_to = 'connect'
+            st.session_state.test_question_mode = False
+            st.session_state.navigate_to = 'scan'
+            st.session_state._nav_pending = False  # Reset so two-phase nav starts fresh
             st.rerun()
     
     # Full Scan Tab
@@ -1455,7 +1615,9 @@ with tab0:
         
         if st.button("Click here to start Complete Assessment →", use_container_width=True, key="nav_full", type="primary"):
             st.session_state.use_rag_mode = True
-            st.session_state.navigate_to = 'connect'
+            st.session_state.test_question_mode = False
+            st.session_state.navigate_to = 'first_scan'
+            st.session_state._nav_pending = False  # Reset so two-phase nav starts fresh
             st.rerun()
         
         # Settings & Configuration as sub-expander
@@ -1473,139 +1635,6 @@ with tab0:
         - **Before Second Scan** in the **Second Scan** tab
         """)
 
-
-
-# ----------------------------------------
-# TAB 1: CONNECT
-# ----------------------------------------
-
-if tab1 is not None:
-    with tab1:
-        st.subheader("Connect to Browser")
-
-        # Show instructions based on workflow mode
-        if st.session_state.use_rag_mode == True:
-            # Full Assessment mode
-            with st.expander("📋 Instructions", expanded=True):
-                st.markdown("""
-                **Complete Assessment Steps:**
-                1. Open your Moodle quiz in Chrome and start an attempt (or preview)
-                2. Make sure the first question is visible
-                3. Click **Connect to Browser** below
-                4. Once connected, go to **First Scan** tab to start the baseline scan
-                5. After first scan, go to **Second Scan** tab to test with course materials
-                6. View **Results** for detailed comparison analysis
-                """)
-        elif st.session_state.use_rag_mode == False:
-            # Baseline Scan mode
-            with st.expander("📋 Instructions", expanded=True):
-                st.markdown("""
-                **Baseline Scan Steps:**
-                1. Open your Moodle quiz in Chrome and start an attempt (or preview)
-                2. Make sure the first question is visible
-                3. Click **Connect to Browser** below
-                4. Once connected, go to **Scan** tab to start the scan
-                5. View **Results** and **Generate Report** for analysis
-                """)
-
-        # Show different content based on connection state
-        if st.session_state.chrome_ok:
-            # Already connected - show success and guide to next step
-            st.success("✓ Connected to Chrome")
-
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                st.markdown("**You're ready to scan!** Navigate to your quiz in Chrome and start an attempt.")
-                st.caption("Make sure the first question is visible before starting the scan.")
-            with col2:
-                if st.button("🔄 Reconnect", use_container_width=True):
-                    st.session_state.chrome_ok = False
-                    st.rerun()
-
-            st.markdown("---")
-
-            # Guide user to next step
-            st.markdown("### Next Step")
-            next_tab = "**Scan**" if not st.session_state.use_rag_mode else "**First Scan**"
-            st.info(f"When your quiz is ready in Chrome, go to the {next_tab} tab to begin.")
-
-        else:
-            # Not connected - show setup
-            left, right = st.columns([3, 2])
-
-            with left:
-                st.subheader("Connect to Your Quiz")
-
-                st.markdown("""
-                The scanner reads quiz questions directly from Chrome and fills in AI-generated answers.
-                You control when to submit.
-                """)
-
-                st.markdown("")
-
-                if st.button("🔌 Connect to Browser", type="primary", use_container_width=True):
-                    with st.spinner("Connecting..."):
-                        ok, url = check_chrome()
-
-                    if ok:
-                        st.session_state.chrome_ok = True
-                        log("Connected to browser", "🌐")
-                        log(f"Page: {url[:50]}...", "📍")
-                        st.rerun()
-                    else:
-                        st.error("Could not connect. See troubleshooting below.")
-
-                with st.expander("Troubleshooting"):
-                    st.markdown("""
-                    **If "Start Scanner" was used to launch the app**, Chrome should connect automatically.
-                    Try clicking Connect again.
-
-                    **Manual setup (if Chrome wasn't started by the app):**
-
-                    macOS:
-                    ```
-                    /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
-                    ```
-
-                    Windows:
-                    ```
-                    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir=%TEMP%\\chrome-debug
-                    ```
-
-                    Then navigate to your quiz and start an attempt.
-                    """)
-
-            # System Status (moved here from the initial landing page)
-            st.markdown("---")
-            st.subheader("System Status")
-            text_model_ok, vision_ok = check_ollama()
-            chrome_ok, chrome_msg = check_chrome()
-
-            s_col1, s_col2 = st.columns(2)
-            with s_col1:
-                if text_model_ok:
-                    st.success("AI models ready")
-                else:
-                    st.error("AI models missing")
-                    st.caption("Install with: ollama pull llama3:8b")
-            with s_col2:
-                if chrome_ok:
-                    st.success("Browser detected")
-                    st.caption(chrome_msg[:200] if chrome_msg else "")
-                    st.session_state.chrome_ok = True
-                else:
-                    st.info("Browser not connected")
-                    if chrome_msg:
-                        st.caption("Detected error: " + chrome_msg)
-
-            if st.button("Refresh System Status"):
-                check_ollama.clear()
-                st.rerun()
-
-            with right:
-                st.subheader("Activity")
-                with st.container(height=300):
-                    show_activity()
 
 
     # ----------------------------------------
@@ -1629,7 +1658,7 @@ if tab2 is not None:
                     **Steps:**
                     1. Open your Moodle quiz in Chrome and start an attempt (or start preview)
                     2. Make sure the first question is visible
-                    3. Go to **Connect** tab and click "Connect to Browser"
+                    3. Click **Connect to Browser** in the sidebar (if not already connected)
                     4. Click **Start First Scan** below
                     5. When complete, submit the quiz in Moodle and navigate to the results page
                     6. Click **Collect Results** below
@@ -1647,7 +1676,7 @@ if tab2 is not None:
                     **Steps:**
                     1. Open your Moodle quiz in Chrome and start an attempt (or start preview)
                     2. Make sure the first question is visible
-                    3. Go to **Connect** tab and click "Connect to Browser"
+                    3. Click **Connect to Browser** in the sidebar (if not already connected)
                     4. Click **Start Scan** below
                     5. When complete, submit the quiz in Moodle and navigate to the results page
                     6. Click **Collect Results** below
@@ -1659,7 +1688,7 @@ if tab2 is not None:
             # STATE 1: Not connected
             if not st.session_state.chrome_ok:
                 st.warning("**Connect to Chrome first** to start scanning.")
-                st.caption("Go to the Connect tab to set up the browser connection.")
+                st.caption("Use the **Connect to Browser** button in the sidebar.")
 
             # STATE 2: Scan complete with results
             elif st.session_state.no_rag_score:
@@ -1688,6 +1717,7 @@ if tab2 is not None:
                         st.markdown("")
                         if st.button("Continue to Second Scan", type="primary", use_container_width=True):
                             st.session_state.navigate_to = 'second_scan'
+                            st.session_state._nav_pending = False
                             st.rerun()
                     else:
                         # Both scans done
@@ -1695,6 +1725,7 @@ if tab2 is not None:
                         st.markdown("")
                         if st.button("Generate Report", type="primary", use_container_width=True):
                             st.session_state.navigate_to = 'results'
+                            st.session_state._nav_pending = False
                             st.rerun()
                 else:
                     # Basic scan mode: go straight to Results
@@ -1702,6 +1733,7 @@ if tab2 is not None:
                     st.markdown("")
                     if st.button("View Results", type="primary", use_container_width=True):
                         st.session_state.navigate_to = 'results'
+                        st.session_state._nav_pending = False
                         st.rerun()
 
             # STATE 3: Answers filled, waiting for submission
@@ -1731,110 +1763,6 @@ if tab2 is not None:
                 st.markdown(f"**{scan_description}**")
 
                 st.markdown("---")
-
-                # Course materials upload (Option A - before first scan)
-                if st.session_state.use_rag_mode:
-                    with st.expander("Course Materials (for Second Scan)", expanded=False):
-                        st.markdown("""
-                        Upload course materials now for use in the Second Scan.
-                        This shows how AI performance changes when it has access to your course content.
-                        """)
-
-                        # Course selection
-                        all_courses = get_all_courses()
-                        selected_course = st.session_state.selected_rag_collection
-                        selected_internal = get_rag_collection_name(selected_course)
-
-                        # Course selector and new course button
-                        col_course, col_new = st.columns([3, 1])
-                        with col_course:
-                            if all_courses:
-                                course_options = [c['display_name'] for c in all_courses]
-                                current_idx = 0
-                                for i, name in enumerate(course_options):
-                                    if name == selected_course:
-                                        current_idx = i
-                                        break
-                                new_selection = st.selectbox(
-                                    "Select course:",
-                                    course_options,
-                                    index=current_idx,
-                                    key="tab2_course_selector"
-                                )
-                                if new_selection != selected_course:
-                                    st.session_state.selected_rag_collection = new_selection
-                                    st.rerun()
-                            else:
-                                st.info("No courses yet. Create one to get started.")
-
-                        with col_new:
-                            st.markdown("")  # Spacing
-                            if st.button("+ New", key="new_course_tab2", use_container_width=True):
-                                st.session_state.show_new_course_tab2 = True
-
-                        # New course form (shown when button clicked)
-                        if st.session_state.get('show_new_course_tab2', False):
-                            new_name = st.text_input("Course name:", placeholder="e.g., PSYC101", key="new_course_name_tab2")
-                            col_create, col_cancel = st.columns(2)
-                            with col_create:
-                                if st.button("Create", key="create_btn_tab2", disabled=not new_name):
-                                    try:
-                                        import chromadb
-                                        client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-                                        internal_name = get_rag_collection_name(new_name)
-                                        client.get_or_create_collection(name=internal_name)
-                                        st.session_state.selected_rag_collection = new_name
-                                        st.session_state.show_new_course_tab2 = False
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"Error: {e}")
-                            with col_cancel:
-                                if st.button("Cancel", key="cancel_btn_tab2"):
-                                    st.session_state.show_new_course_tab2 = False
-                                    st.rerun()
-
-                        # Files in current course
-                        st.markdown("---")
-                        course_files = get_course_files(selected_internal)
-
-                        if course_files:
-                            st.markdown(f"**Files in {selected_course}:**")
-                            for filename, segment_count in course_files.items():
-                                col_file, col_del = st.columns([4, 1])
-                                with col_file:
-                                    st.text(f"  {filename} ({segment_count} segments)")
-                                with col_del:
-                                    if st.button("x", key=f"del_{filename}_tab2", help=f"Remove {filename}"):
-                                        deleted = delete_file_from_course(selected_internal, filename)
-                                        if deleted > 0:
-                                            st.rerun()
-
-                            # Clear all button
-                            if st.button("Clear All Files", key="clear_all_tab2"):
-                                if clear_course_materials(selected_internal):
-                                    st.rerun()
-                        else:
-                            st.caption("No files uploaded yet.")
-
-                        # Upload new files
-                        st.markdown("---")
-                        uploaded_files = st.file_uploader(
-                            "Upload files (PDF, TXT, MD)",
-                            type=['txt', 'md', 'pdf'],
-                            accept_multiple_files=True,
-                            key="upload_tab2"
-                        )
-
-                        if uploaded_files:
-                            if st.button("Upload Files", type="primary", key="upload_btn_tab2"):
-                                progress_area = st.empty()
-                                with progress_area.container():
-                                    st.markdown("**Processing...**")
-                                    progress_text = st.empty()
-                                    total = process_uploaded_files(uploaded_files, selected_internal, progress_text)
-                                    if total > 0:
-                                        progress_text.success(f"Added {len(uploaded_files)} file(s) ({total} segments)")
-                                        st.rerun()
 
                 st.markdown("**Before you start:**")
                 st.markdown("• Make sure your quiz is open in Chrome")
@@ -1892,107 +1820,16 @@ if tab3 is not None:
                 This scan gives the AI access to your course materials.
                 """)
 
-            # Course materials section
+            # Course materials status
             selected_course = st.session_state.selected_rag_collection
             selected_internal = get_rag_collection_name(selected_course)
+            course_files = get_course_files(selected_internal)
 
-            with st.expander("Course Materials", expanded=True):
-                # Course selection
-                all_courses = get_all_courses()
-
-                col_course, col_new = st.columns([3, 1])
-                with col_course:
-                    if all_courses:
-                        course_options = [c['display_name'] for c in all_courses]
-                        current_idx = 0
-                        for i, name in enumerate(course_options):
-                            if name == selected_course:
-                                current_idx = i
-                                break
-                        new_selection = st.selectbox(
-                            "Select course:",
-                            course_options,
-                            index=current_idx,
-                            key="tab3_course_selector"
-                        )
-                        if new_selection != selected_course:
-                            st.session_state.selected_rag_collection = new_selection
-                            st.rerun()
-                    else:
-                        st.info("No courses yet. Create one to get started.")
-
-                with col_new:
-                    st.markdown("")  # Spacing
-                    if st.button("+ New", key="new_course_tab3", use_container_width=True):
-                        st.session_state.show_new_course_tab3 = True
-
-                # New course form
-                if st.session_state.get('show_new_course_tab3', False):
-                    new_name = st.text_input("Course name:", placeholder="e.g., PSYC101", key="new_course_name_tab3")
-                    col_create, col_cancel = st.columns(2)
-                    with col_create:
-                        if st.button("Create", key="create_btn_tab3", disabled=not new_name):
-                            try:
-                                import chromadb
-                                client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-                                internal_name = get_rag_collection_name(new_name)
-                                client.get_or_create_collection(name=internal_name)
-                                st.session_state.selected_rag_collection = new_name
-                                st.session_state.show_new_course_tab3 = False
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error: {e}")
-                    with col_cancel:
-                        if st.button("Cancel", key="cancel_btn_tab3"):
-                            st.session_state.show_new_course_tab3 = False
-                            st.rerun()
-
-                # Files in current course
-                st.markdown("---")
-                course_files = get_course_files(selected_internal)
-
-                if course_files:
-                    st.markdown(f"**Files in {selected_course}:**")
-                    for filename, segment_count in course_files.items():
-                        col_file, col_del = st.columns([4, 1])
-                        with col_file:
-                            st.text(f"  {filename} ({segment_count} segments)")
-                        with col_del:
-                            if st.button("x", key=f"del_{filename}_tab3", help=f"Remove {filename}"):
-                                deleted = delete_file_from_course(selected_internal, filename)
-                                if deleted > 0:
-                                    st.rerun()
-
-                    # Clear all button
-                    if st.button("Clear All Files", key="clear_all_tab3"):
-                        if clear_course_materials(selected_internal):
-                            st.rerun()
-
-                    # Status
-                    total_segments = sum(course_files.values())
-                    st.caption(f"Ready ({total_segments} text segments)")
-                else:
-                    st.warning(f"No files in {selected_course}. Upload materials for a meaningful second scan.")
-
-                # Upload new files
-                st.markdown("---")
-                uploaded_files = st.file_uploader(
-                    "Upload files (PDF, TXT, MD)",
-                    type=['txt', 'md', 'pdf'],
-                    accept_multiple_files=True,
-                    key="upload_tab3"
-                )
-
-                if uploaded_files:
-                    if st.button("Upload Files", type="primary", key="upload_btn_tab3"):
-                        progress_area = st.empty()
-                        with progress_area.container():
-                            st.markdown("**Processing...**")
-                            progress_text = st.empty()
-                            total = process_uploaded_files(uploaded_files, selected_internal, progress_text)
-                            if total > 0:
-                                progress_text.success(f"Added {len(uploaded_files)} file(s) ({total} segments)")
-                                st.rerun()
+            if course_files:
+                total_segments = sum(course_files.values())
+                st.success(f"Course: **{selected_course}** — {len(course_files)} file(s), {total_segments} segments")
+            else:
+                st.warning(f"No files in **{selected_course}**. Add materials via **Course Materials** in the sidebar.")
 
             # STATE 1: First scan not done yet
             if not st.session_state.no_rag_score:
@@ -2028,6 +1865,7 @@ if tab3 is not None:
                 st.markdown("")
                 if st.button("Generate Report", type="primary", use_container_width=True):
                     st.session_state.navigate_to = 'results'
+                    st.session_state._nav_pending = False
                     st.rerun()
 
             # STATE 3: Answers filled, waiting for submission
@@ -2564,227 +2402,228 @@ Begin your analysis:"""
         return {'error': str(e)}
 
 
-with tab5:
-    st.subheader("🧪 Test a Single Question")
+if tab5 is not None:
+    with tab5:
+        st.subheader("🧪 Test a Single Question")
 
-    # Show instructions at the top (matching the workflow description)
-    with st.expander("📋 Instructions", expanded=True):
-        st.markdown("""
-        **Steps:**
-        1. Type or paste a quiz question with multiple choice options
-        2. Mark the correct answer
-        3. Click "Test Question" to run the AI against that question
-        4. Review the result and see if the AI answered it correctly (and how confident it was)
+        # Show instructions at the top (matching the workflow description)
+        with st.expander("📋 Instructions", expanded=True):
+            st.markdown("""
+            **Steps:**
+            1. Type or paste a quiz question with multiple choice options
+            2. Mark the correct answer
+            3. Click "Test Question" to run the AI against that question
+            4. Review the result and see if the AI answered it correctly (and how confident it was)
 
-        **Notes:**
-        - Individual questions are tested with your configured LLM
-        - No Moodle connection needed
-        - Takes 30 seconds to 2 minutes depending on model speed (and number of samples)
-        - **Multi-sample mode:** Runs AI multiple times and selects the **most common answer**
-        - Consistency shows how often AI chose the same answer (e.g., "7/10" = 70% agreement)
-        """)
+            **Notes:**
+            - Individual questions are tested with your configured LLM
+            - No Moodle connection needed
+            - Takes 30 seconds to 2 minutes depending on model speed (and number of samples)
+            - **Multi-sample mode:** Runs AI multiple times and selects the **most common answer**
+            - Consistency shows how often AI chose the same answer (e.g., "7/10" = 70% agreement)
+            """)
     
-    # Initialize session state for this tab
-    if 'test_question_result' not in st.session_state:
-        st.session_state.test_question_result = None
+        # Initialize session state for this tab
+        if 'test_question_result' not in st.session_state:
+            st.session_state.test_question_result = None
     
-    col1, col2 = st.columns([3, 2])
+        col1, col2 = st.columns([3, 2])
     
-    with col1:
-        st.markdown("### Enter Question")
+        with col1:
+            st.markdown("### Enter Question")
         
-        # Question type selector
-        q_type = st.radio("Question Type", ["Multiple Choice", "True/False"], horizontal=True, key="q_type_select")
+            # Question type selector
+            q_type = st.radio("Question Type", ["Multiple Choice", "True/False"], horizontal=True, key="q_type_select")
         
-        question_text = st.text_area(
-            "Question text",
-            placeholder="Enter the question here...",
-            height=100,
-            key="test_q_text"
-        )
-        
-        if q_type == "Multiple Choice":
-            st.markdown("### Options")
-            
-            opt_cols = st.columns(2)
-            with opt_cols[0]:
-                opt_a = st.text_input("A.", key="opt_a")
-                opt_b = st.text_input("B.", key="opt_b")
-                opt_c = st.text_input("C.", key="opt_c")
-            with opt_cols[1]:
-                opt_d = st.text_input("D.", key="opt_d")
-                opt_e = st.text_input("E.", key="opt_e")
-            
-            correct = st.selectbox("Correct answer", ["A", "B", "C", "D", "E"], key="correct_ans")
-        else:
-            # True/False
-            opt_a = "True"
-            opt_b = "False"
-            opt_c = opt_d = opt_e = ""
-            correct = st.selectbox("Correct answer", ["A (True)", "B (False)"], key="correct_tf")
-            correct = "A" if "True" in correct else "B"
-        
-        st.divider()
-        
-        # Test options
-        test_cols = st.columns(4)
-        with test_cols[0]:
-            # Get installed models for test dropdown
-            test_model_options = ['llama3:8b', 'mistral', 'gemma2:9b']
-            try:
-                import ollama as ollama_check
-                models_resp = ollama_check.list()
-                installed = []
-                for m in models_resp.get('models', []):
-                    name = m.get('name', '') or m.get('model', '')
-                    if name:
-                        installed.append(name.lower())
-                # Filter to only installed models
-                test_model_options = [m for m in test_model_options if any(m.split(':')[0].lower() in inst or m.lower() in inst for inst in installed)]
-                if not test_model_options:
-                    test_model_options = ['llama3:8b']  # Fallback
-            except:
-                pass
-
-            test_model = st.selectbox(
-                "Model",
-                test_model_options,
-                key="test_model"
+            question_text = st.text_area(
+                "Question text",
+                placeholder="Enter the question here...",
+                height=100,
+                key="test_q_text"
             )
-        with test_cols[1]:
-            test_with_rag = st.checkbox("Use RAG", key="test_rag", help="Include course materials")
-        with test_cols[2]:
-            num_samples = st.number_input("Samples", min_value=1, max_value=10, value=1, key="num_samples",
-                                          help="1=fast single test, 5-10=multi-sample consistency check")
-        with test_cols[3]:
-            st.write("")  # Spacing
-            testing_disabled = st.session_state.is_testing
-            test_btn_label = "⏳ Testing..." if testing_disabled else "🧪 Test Question"
-            test_button = st.button(test_btn_label, type="primary", use_container_width=True, disabled=testing_disabled)
-
-        if test_button and question_text:
-            options = {}
-            if opt_a: options['A'] = opt_a
-            if opt_b: options['B'] = opt_b
-            if opt_c: options['C'] = opt_c
-            if opt_d: options['D'] = opt_d
-            if opt_e: options['E'] = opt_e
-
-            if len(options) < 2:
-                st.error("Please provide at least 2 options")
+        
+            if q_type == "Multiple Choice":
+                st.markdown("### Options")
+            
+                opt_cols = st.columns(2)
+                with opt_cols[0]:
+                    opt_a = st.text_input("A.", key="opt_a")
+                    opt_b = st.text_input("B.", key="opt_b")
+                    opt_c = st.text_input("C.", key="opt_c")
+                with opt_cols[1]:
+                    opt_d = st.text_input("D.", key="opt_d")
+                    opt_e = st.text_input("E.", key="opt_e")
+            
+                correct = st.selectbox("Correct answer", ["A", "B", "C", "D", "E"], key="correct_ans")
             else:
-                st.session_state.is_testing = True
-                st.session_state.test_sample_progress = None
+                # True/False
+                opt_a = "True"
+                opt_b = "False"
+                opt_c = opt_d = opt_e = ""
+                correct = st.selectbox("Correct answer", ["A (True)", "B (False)"], key="correct_tf")
+                correct = "A" if "True" in correct else "B"
+        
+            st.divider()
+        
+            # Test options
+            test_cols = st.columns(4)
+            with test_cols[0]:
+                # Get installed models for test dropdown
+                test_model_options = ['llama3:8b', 'mistral', 'gemma2:9b']
+                try:
+                    import ollama as ollama_check
+                    models_resp = ollama_check.list()
+                    installed = []
+                    for m in models_resp.get('models', []):
+                        name = m.get('name', '') or m.get('model', '')
+                        if name:
+                            installed.append(name.lower())
+                    # Filter to only installed models
+                    test_model_options = [m for m in test_model_options if any(m.split(':')[0].lower() in inst or m.lower() in inst for inst in installed)]
+                    if not test_model_options:
+                        test_model_options = ['llama3:8b']  # Fallback
+                except:
+                    pass
 
-                # Show spinner with sample info if multi-sample
-                if num_samples > 1:
-                    spinner_text = f"Testing with {test_model} (Sample 1/{num_samples})..."
+                test_model = st.selectbox(
+                    "Model",
+                    test_model_options,
+                    key="test_model"
+                )
+            with test_cols[1]:
+                test_with_rag = st.checkbox("Use RAG", key="test_rag", help="Include course materials")
+            with test_cols[2]:
+                num_samples = st.number_input("Samples", min_value=1, max_value=10, value=1, key="num_samples",
+                                              help="1=fast single test, 5-10=multi-sample consistency check")
+            with test_cols[3]:
+                st.write("")  # Spacing
+                testing_disabled = st.session_state.is_testing
+                test_btn_label = "⏳ Testing..." if testing_disabled else "🧪 Test Question"
+                test_button = st.button(test_btn_label, type="primary", use_container_width=True, disabled=testing_disabled)
+
+            if test_button and question_text:
+                options = {}
+                if opt_a: options['A'] = opt_a
+                if opt_b: options['B'] = opt_b
+                if opt_c: options['C'] = opt_c
+                if opt_d: options['D'] = opt_d
+                if opt_e: options['E'] = opt_e
+
+                if len(options) < 2:
+                    st.error("Please provide at least 2 options")
                 else:
-                    spinner_text = f"Testing with {test_model}..."
+                    st.session_state.is_testing = True
+                    st.session_state.test_sample_progress = None
 
-                with st.spinner(spinner_text):
-                    try:
-                        result = test_single_question(
-                            question=question_text,
-                            options=options,
-                            correct_answer=correct,
-                            model=test_model,
-                            use_rag=test_with_rag,
-                            num_samples=num_samples
-                        )
-                        st.session_state.test_question_result = result
-                    finally:
-                        st.session_state.is_testing = False
-                        st.session_state.test_sample_progress = None
+                    # Show spinner with sample info if multi-sample
+                    if num_samples > 1:
+                        spinner_text = f"Testing with {test_model} (Sample 1/{num_samples})..."
+                    else:
+                        spinner_text = f"Testing with {test_model}..."
+
+                    with st.spinner(spinner_text):
+                        try:
+                            result = test_single_question(
+                                question=question_text,
+                                options=options,
+                                correct_answer=correct,
+                                model=test_model,
+                                use_rag=test_with_rag,
+                                num_samples=num_samples
+                            )
+                            st.session_state.test_question_result = result
+                        finally:
+                            st.session_state.is_testing = False
+                            st.session_state.test_sample_progress = None
     
-    with col2:
-        st.markdown("### Results")
+        with col2:
+            st.markdown("### Results")
         
-        result = st.session_state.test_question_result
+            result = st.session_state.test_question_result
         
-        if result is None:
-            st.caption("Enter a question and click Test to see results.")
-        elif 'error' in result:
-            st.error(f"Error: {result['error']}")
-        else:
-            # Show result
-            is_correct = result.get('is_correct')
-            ai_answer = result.get('ai_answer', '?')
-            confidence = result.get('confidence')
-            consistency = result.get('consistency', '1/1')
-            samples = result.get('samples', 1)
-            
-            # Main result
-            if is_correct:
-                st.error(f"### ⚠️ AI Correct: {ai_answer}")
-                st.caption("This question is VULNERABLE")
-            elif is_correct is False:
-                st.success(f"### ✅ AI Wrong: {ai_answer}")
-                st.caption("AI answered incorrectly - good resistance!")
+            if result is None:
+                st.caption("Enter a question and click Test to see results.")
+            elif 'error' in result:
+                st.error(f"Error: {result['error']}")
             else:
-                st.warning(f"### AI answered: {ai_answer}")
-                st.caption("Could not determine correctness")
+                # Show result
+                is_correct = result.get('is_correct')
+                ai_answer = result.get('ai_answer', '?')
+                confidence = result.get('confidence')
+                consistency = result.get('consistency', '1/1')
+                samples = result.get('samples', 1)
             
-            # Multi-sample info
-            if samples > 1:
-                st.markdown(f"**Consistency:** {consistency}")
-                consistency_pct = int(consistency.split('/')[0]) / int(consistency.split('/')[1]) * 100
-                st.progress(consistency_pct / 100)
-                st.caption("How often AI chose the same answer across runs")
+                # Main result
+                if is_correct:
+                    st.error(f"### ⚠️ AI Correct: {ai_answer}")
+                    st.caption("This question is VULNERABLE")
+                elif is_correct is False:
+                    st.success(f"### ✅ AI Wrong: {ai_answer}")
+                    st.caption("AI answered incorrectly - good resistance!")
+                else:
+                    st.warning(f"### AI answered: {ai_answer}")
+                    st.caption("Could not determine correctness")
+            
+                # Multi-sample info
+                if samples > 1:
+                    st.markdown(f"**Consistency:** {consistency}")
+                    consistency_pct = int(consistency.split('/')[0]) / int(consistency.split('/')[1]) * 100
+                    st.progress(consistency_pct / 100)
+                    st.caption("How often AI chose the same answer across runs")
 
-                # Show average confidence if available
-                avg_conf = result.get('avg_confidence')
-                if avg_conf:
-                    st.markdown(f"**Avg Confidence:** {avg_conf}%")
+                    # Show average confidence if available
+                    avg_conf = result.get('avg_confidence')
+                    if avg_conf:
+                        st.markdown(f"**Avg Confidence:** {avg_conf}%")
 
-                # Distribution histogram
-                if result.get('distribution'):
-                    st.markdown("**Answer Distribution:**")
-                    dist = result['distribution']
-                    max_count = max(dist.values()) if dist else 1
+                    # Distribution histogram
+                    if result.get('distribution'):
+                        st.markdown("**Answer Distribution:**")
+                        dist = result['distribution']
+                        max_count = max(dist.values()) if dist else 1
 
-                    # Simple text-based histogram
-                    for ans in sorted(dist.keys()):
-                        count = dist[ans]
-                        bar_len = int((count / max_count) * 10)  # Max 10 chars
-                        bar = "█" * bar_len
-                        st.text(f"  {ans}: {bar} ({count})")
+                        # Simple text-based histogram
+                        for ans in sorted(dist.keys()):
+                            count = dist[ans]
+                            bar_len = int((count / max_count) * 10)  # Max 10 chars
+                            bar = "█" * bar_len
+                            st.text(f"  {ans}: {bar} ({count})")
 
-                # Per-sample details - proper table
-                if result.get('sample_details'):
-                    st.markdown("**Sample Details:**")
-                    df = pd.DataFrame(result['sample_details'])
-                    df.columns = ['Sample', 'Answer', 'Confidence (%)']
-                    st.dataframe(df, use_container_width=True, hide_index=True)
+                    # Per-sample details - proper table
+                    if result.get('sample_details'):
+                        st.markdown("**Sample Details:**")
+                        df = pd.DataFrame(result['sample_details'])
+                        df.columns = ['Sample', 'Answer', 'Confidence (%)']
+                        st.dataframe(df, use_container_width=True, hide_index=True)
 
-                # Reasoning (collapsed for multi-sample)
-                if result.get('reasoning'):
-                    with st.expander("AI Reasoning (first sample)"):
-                        st.write(result['reasoning'])
+                    # Reasoning (collapsed for multi-sample)
+                    if result.get('reasoning'):
+                        with st.expander("AI Reasoning (first sample)"):
+                            st.write(result['reasoning'])
 
-            # Confidence (single sample only)
-            elif confidence is not None:
-                st.markdown(f"**Confidence:** {confidence}%")
-                st.progress(confidence / 100)
+                # Confidence (single sample only)
+                elif confidence is not None:
+                    st.markdown(f"**Confidence:** {confidence}%")
+                    st.progress(confidence / 100)
 
-                if confidence >= 80 and not is_correct:
-                    st.warning("⚠️ High confidence but wrong - AI is confidently incorrect!")
-                elif confidence >= 80 and is_correct:
-                    st.error("🚨 High confidence AND correct - very vulnerable!")
+                    if confidence >= 80 and not is_correct:
+                        st.warning("⚠️ High confidence but wrong - AI is confidently incorrect!")
+                    elif confidence >= 80 and is_correct:
+                        st.error("🚨 High confidence AND correct - very vulnerable!")
 
-                # Reasoning and full response only for single sample
-                if result.get('reasoning'):
-                    with st.expander("AI Reasoning"):
-                        st.write(result['reasoning'])
+                    # Reasoning and full response only for single sample
+                    if result.get('reasoning'):
+                        with st.expander("AI Reasoning"):
+                            st.write(result['reasoning'])
 
-                with st.expander("Full AI Response"):
-                    st.code(result.get('full_response', 'N/A'))
+                    with st.expander("Full AI Response"):
+                        st.code(result.get('full_response', 'N/A'))
 
-            # RAG indicator
-            if result.get('used_rag'):
-                st.caption("📚 Tested with course materials")
-            else:
-                st.caption("🧠 Tested with general knowledge only")
+                # RAG indicator
+                if result.get('used_rag'):
+                    st.caption("📚 Tested with course materials")
+                else:
+                    st.caption("🧠 Tested with general knowledge only")
 
 
 # ----------------------------------------
