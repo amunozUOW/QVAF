@@ -145,11 +145,10 @@ for key, val in defaults.items():
 # ACTIVITY LOG
 # ============================================
 
-def log(message, icon="•"):
+def log(message):
     """Add timestamped message to activity log"""
     st.session_state.activity.append({
         'time': datetime.now().strftime("%H:%M:%S"),
-        'icon': icon,
         'text': message
     })
     st.session_state.activity = st.session_state.activity[-50:]  # Keep more entries
@@ -164,10 +163,10 @@ def show_activity():
     if not st.session_state.activity:
         st.caption("Waiting to start...")
         return
-    
+
     # Show most recent first, show more items
     for item in reversed(st.session_state.activity[-20:]):
-        st.text(f"{item['icon']} {item['time']}  {item['text']}")
+        st.text(f"{item['time']}  {item['text']}")
 
 
 # ============================================
@@ -238,8 +237,13 @@ def check_ollama():
 # QUIZ FUNCTIONS
 # ============================================
 
-def run_quiz(use_rag=False):
-    """Run quiz attempt via quiz_browser_enhanced.py"""
+def run_quiz(use_rag=False, status_container=None):
+    """Run quiz attempt via quiz_browser_enhanced.py
+
+    Args:
+        use_rag: Whether to use RAG/course materials
+        status_container: Optional st.status() container for real-time progress
+    """
     import subprocess
 
     mode = "--with-rag" if use_rag else "--no-rag"
@@ -247,9 +251,9 @@ def run_quiz(use_rag=False):
     num_samples = st.session_state.num_samples
     label = "with course materials" if use_rag else "baseline"
 
-    log(f"Starting {label} scan using {model}...", "🚀")
+    log(f"Starting {label} scan using {model}...")
     if num_samples > 1:
-        log(f"Sampling: {num_samples} samples per question", "🎲")
+        log(f"Sampling: {num_samples} samples per question")
 
     # Build command
     cmd = ['python3', 'quiz_browser_enhanced.py', mode, '--no-wait',
@@ -260,7 +264,7 @@ def run_quiz(use_rag=False):
         collection_name = st.session_state.selected_rag_collection
         internal_name = get_rag_collection_name(collection_name)
         cmd.extend(['--collection', internal_name])
-        log(f"Using course materials: {collection_name}", "📚")
+        log(f"Using course materials: {collection_name}")
 
     existing = set(glob.glob(str(RAW_ATTEMPTS_DIR / "quiz_attempt_*_*.json")))
 
@@ -273,6 +277,13 @@ def run_quiz(use_rag=False):
     )
     
     q_count = 0
+    total_questions = None
+
+    def update(message):
+        """Log message and write to live status container if available."""
+        log(message)
+        if status_container:
+            status_container.write(f"- {message}")
 
     for line in process.stdout:
         line = line.strip()
@@ -287,63 +298,61 @@ def run_quiz(use_rag=False):
                 # New question starting
                 q_count += 1
                 q_preview = progress_msg.split(":", 1)[1][:40].strip()
-                log(f"Q{q_count}: {q_preview}", "❓")
+                progress_label = f"Q{q_count}"
+                if total_questions:
+                    progress_label = f"Q{q_count}/{total_questions}"
+                update(f"{progress_label}: {q_preview}")
+                if status_container:
+                    status_container.update(label=f"Answering question {q_count}" + (f" of {total_questions}" if total_questions else ""))
 
             elif "AI thinking" in progress_msg:
-                log(f"AI analyzing Q{q_count}...", "🤔")
+                update(f"AI analyzing Q{q_count}...")
 
             elif "Running" in progress_msg and "samples" in progress_msg:
-                log(f"Running multiple samples for Q{q_count}...", "🎲")
+                update(f"Running multiple samples for Q{q_count}...")
 
             elif "Answer:" in progress_msg:
                 # Got an answer with confidence
                 match = re.search(r'Answer:\s*([A-Z]).*confidence:\s*(\d+)', progress_msg)
                 if match:
                     ans, conf = match.groups()
-                    if int(conf) >= 80:
-                        log(f"Q{q_count} → {ans} (high confidence: {conf}%)", "🎯")
-                    else:
-                        log(f"Q{q_count} → {ans} (confidence: {conf}%)", "🤖")
+                    update(f"Q{q_count} -> {ans} (confidence: {conf}%)")
                 else:
-                    log(f"Q{q_count} answered", "✓")
+                    update(f"Q{q_count} answered")
 
             elif "image" in progress_msg.lower() and "analyzing" in progress_msg.lower():
-                # Image found in question
                 match = re.search(r'(\d+)\s+image', progress_msg)
                 img_count = match.group(1) if match else "1"
-                log(f"Q{q_count}: Analyzing {img_count} image(s)...", "🖼️")
+                update(f"Q{q_count}: Analyzing {img_count} image(s)...")
 
             elif "link" in progress_msg.lower() and "following" in progress_msg.lower():
-                # Link found in question
                 match = re.search(r'(\d+)\s+link', progress_msg)
                 link_count = match.group(1) if match else "1"
-                log(f"Q{q_count}: Following {link_count} link(s)...", "🔗")
+                update(f"Q{q_count}: Following {link_count} link(s)...")
 
             elif "Found" in progress_msg and "questions" in progress_msg:
-                # Starting question answering
                 match = re.search(r'Found\s+(\d+)\s+questions', progress_msg)
                 if match:
-                    total = match.group(1)
-                    log(f"Starting scan: {total} questions found", "📋")
+                    total_questions = match.group(1)
+                    update(f"Found {total_questions} questions")
 
             elif "Page complete" in progress_msg:
-                # Page finished
                 match = re.search(r'(\d+)\s+questions answered', progress_msg)
                 if match:
                     answered = match.group(1)
-                    log(f"Page complete: {answered} questions answered", "✅")
+                    update(f"Page complete: {answered} questions answered")
 
         # Also parse other useful messages
         elif "INFO BLOCK" in line:
-            log("Reading scenario context...", "📋")
+            update("Reading scenario context...")
         elif "image" in line.lower() and "found" in line.lower():
-            log("Analyzing image...", "🖼️")
+            update("Analyzing image...")
         elif "link" in line.lower() and "found" in line.lower():
-            log("Following link...", "🔗")
+            update("Following link...")
         elif "RAG" in line and ("loaded" in line.lower() or "initialized" in line.lower()):
-            log("Course materials loaded", "📚")
+            update("Course materials loaded")
         elif "Connected" in line or "Found Moodle" in line:
-            log("Browser connected", "🌐")
+            log("Browser connected")
     
     process.wait()
 
@@ -365,7 +374,7 @@ def run_quiz(use_rag=False):
             import shutil
             shutil.move(src, dst)
             matches = [dst]
-            log("Moved output to correct location", "📁")
+            log("Moved output to correct location")
 
     # Also check project root
     if not matches:
@@ -377,18 +386,18 @@ def run_quiz(use_rag=False):
             import shutil
             shutil.move(src, dst)
             matches = [dst]
-            log("Moved output to correct location", "📁")
+            log("Moved output to correct location")
 
     if matches:
         output = sorted(matches)[-1]
-        log(f"Complete! {q_count} questions answered", "✅")
+        log(f"Complete! {q_count} questions answered")
         return output, q_count
     else:
-        log("Error: No output file created", "❌")
+        log("Error: No output file created")
         # Provide more diagnostic info
         all_json = glob.glob(str(RAW_ATTEMPTS_DIR / "*.json")) + glob.glob("*.json")
         if all_json:
-            log(f"Found JSON files: {len(all_json)}", "🔍")
+            log(f"Found JSON files: {len(all_json)}")
         raise Exception("Scan failed - no output file")
 
 
@@ -396,7 +405,7 @@ def scrape_results():
     """Get results from submitted quiz"""
     from playwright.sync_api import sync_playwright
     
-    log("Reading quiz results...", "📊")
+    log("Reading quiz results...")
     results = []
     
     with sync_playwright() as p:
@@ -432,7 +441,7 @@ def scrape_results():
     total = len([r for r in results if r.get('is_correct') is not None])
     pct = round(correct/total*100) if total else 0
     
-    log(f"Score: {correct}/{total} ({pct}%)", "🏆")
+    log(f"Score: {correct}/{total} ({pct}%)")
     return results
 
 
@@ -468,7 +477,7 @@ def merge_attempts(file1, file2=None, no_rag_score=None, with_rag_score=None):
 
     If file2 is None (basic scan mode), only file1 data is used.
     """
-    log("Preparing scan results...", "🔄")
+    log("Preparing scan results...")
 
     with open(file1) as f:
         d1 = json.load(f)
@@ -490,16 +499,41 @@ def merge_attempts(file1, file2=None, no_rag_score=None, with_rag_score=None):
                 return i
         return None
 
+    def strip_label(text):
+        """Strip option label prefixes (A. 1. III. etc.) from text."""
+        return re.sub(
+            r'^(?:[a-zA-Z][\.)\]]\s*'
+            r'|[0-9]+[\.)\]]\s*'
+            r'|(?:I{1,3}|IV|V|VI{0,3}|IX|X)[\.)\]]\s*'
+            r'|(?:i{1,3}|iv|v|vi{0,3}|ix|x)[\.)\]]\s*'
+            r')', '', text
+        ).lstrip('\n').strip()
+
     def get_letter(text, opts):
+        """Extract correct answer letter from Moodle feedback text (supplementary)."""
         if not text or not opts:
             return None
         clean = re.sub(r'^The correct answer is:?\s*', '', text, flags=re.IGNORECASE).strip()
+        clean = strip_label(clean)
+        clean_lower = clean.lower()
+
+        # Exact match
         for letter, opt in opts.items():
-            if opt.lower().strip() == clean.lower():
+            if strip_label(opt).lower() == clean_lower:
                 return letter
+
+        # Partial match (contains)
+        for letter, opt in opts.items():
+            opt_clean = strip_label(opt).lower()
+            if clean_lower in opt_clean or opt_clean in clean_lower:
+                return letter
+
         return None
 
     questions = []
+    d1_results = d1.get('results', [])
+    d2_results = d2.get('results', [])
+
     for q in d1['questions']:
         if not q.get('options'):
             continue
@@ -510,12 +544,17 @@ def merge_attempts(file1, file2=None, no_rag_score=None, with_rag_score=None):
         # Find matching question in with_rag data (if available)
         q2 = find(q_text, d2['questions'], 'question') if d2['questions'] else None
 
+        # Match results from each scan separately
+        m1 = find(q_text, d1_results, 'question')
+        m2 = find(q_text, d2_results, 'question') if d2_results else None
+
+        # Authoritative correctness from Moodle CSS classes
+        is_correct_no_rag = m1.get('is_correct') if m1 else None
+        is_correct_with_rag = m2.get('is_correct') if m2 else None
+
+        # Supplementary: extract correct answer letter from feedback text
         correct = 'UNKNOWN'
-        results_to_check = [d1.get('results', [])]
-        if d2.get('results'):
-            results_to_check.append(d2['results'])
-        for res in results_to_check:
-            m = find(q_text, res, 'question')
+        for m in [m1, m2]:
             if m and m.get('correct_answer'):
                 letter = get_letter(m['correct_answer'], q['options'])
                 if letter:
@@ -527,6 +566,8 @@ def merge_attempts(file1, file2=None, no_rag_score=None, with_rag_score=None):
             'question': q.get('text', '') or q.get('question', ''),
             'options': q.get('options', {}),
             'correct_answer': correct,
+            'is_correct_without_rag': is_correct_no_rag,
+            'is_correct_with_rag': is_correct_with_rag,
             'response_without_rag': {
                 'answer': q.get('llm_answer', ''),
                 'confidence': q.get('llm_confidence', 0),
@@ -553,7 +594,7 @@ def merge_attempts(file1, file2=None, no_rag_score=None, with_rag_score=None):
     with open(out, 'w') as f:
         json.dump(merged, f, indent=2)
 
-    log(f"Prepared {len(questions)} questions", "✅")
+    log(f"Prepared {len(questions)} questions")
     return str(out)
 
 
@@ -561,16 +602,16 @@ def run_analysis(merged_file):
     """Generate vulnerability report and dashboard with detailed progress"""
     import subprocess
     
-    log("Starting vulnerability analysis...", "🔬")
-    
+    log("Starting vulnerability analysis...")
+
     # Load merged file to get question count
     with open(merged_file) as f:
         merged_data = json.load(f)
     total_questions = len(merged_data.get('questions', []))
-    log(f"Analyzing {total_questions} questions", "📋")
-    
+    log(f"Analyzing {total_questions} questions")
+
     # Run reform_agent with streaming output
-    log("Phase 1: Classifying question types...", "🏷️")
+    log("Phase 1: Classifying question types...")
     
     process = subprocess.Popen(
         ['python3', 'reform_agent.py', merged_file, '--model', st.session_state.model],
@@ -589,21 +630,20 @@ def run_analysis(merged_file):
         # Parse reform_agent output
         if "Classifying Question" in line:
             question_count += 1
-            log(f"Classifying Q{question_count}/{total_questions}...", "🔍")
+            log(f"Classifying Q{question_count}/{total_questions}...")
         elif "Type:" in line:
             qtype = line.split("Type:")[1].strip()
-            log(f"  → Type: {qtype}", "📝")
+            log(f"  Type: {qtype}")
         elif "Vulnerability:" in line:
             vuln = line.split("Vulnerability:")[1].strip()
-            icon = "🔴" if vuln == "HIGH" else "🟡" if vuln == "MODERATE" else "🟢" if vuln == "LOW" else "⚪"
-            log(f"  → Vulnerability: {vuln}", icon)
+            log(f"  Vulnerability: {vuln}")
         elif "Generating qualitative" in line.lower():
-            log("Generating detailed recommendations...", "💡")
+            log("Generating detailed recommendations...")
         elif "Question" in line and "analysis" in line.lower():
             # e.g. "Question 3: Generating analysis..."
             match = re.search(r'Question (\d+)', line)
             if match:
-                log(f"Writing recommendation for Q{match.group(1)}...", "✍️")
+                log(f"Writing recommendation for Q{match.group(1)}...")
     
     process.wait()
     
@@ -614,13 +654,13 @@ def run_analysis(merged_file):
         if os.path.exists(alt_report):
             report = alt_report
         else:
-            log("Classification failed - no report generated", "❌")
+            log("Classification failed - no report generated")
             return None, None
-    
-    log("Phase 1 complete!", "✅")
-    
+
+    log("Phase 1 complete")
+
     # Run analysis_agent with streaming output
-    log("Phase 2: Generating dashboard...", "📊")
+    log("Phase 2: Generating dashboard...")
     
     process = subprocess.Popen(
         ['python3', 'analysis_agent.py', report],
@@ -637,15 +677,15 @@ def run_analysis(merged_file):
         
         # Parse analysis_agent output
         if "Calculating" in line:
-            log("Calculating statistics...", "🔢")
+            log("Calculating statistics...")
         elif "LLM interpretation" in line.lower():
-            log("Generating AI interpretation...", "🤖")
+            log("Generating AI interpretation...")
         elif "markdown" in line.lower():
-            log("Creating markdown summary...", "📄")
+            log("Creating markdown summary...")
         elif "HTML" in line.lower() or "dashboard" in line.lower():
-            log("Building HTML dashboard...", "🎨")
+            log("Building HTML dashboard...")
         elif "saved" in line.lower():
-            log("Saving files...", "💾")
+            log("Saving files...")
     
     process.wait()
     
@@ -656,11 +696,11 @@ def run_analysis(merged_file):
         dashboard = report.replace('_vulnerability_report.json', '_dashboard.html')
     
     if os.path.exists(dashboard):
-        log("Phase 2 complete!", "✅")
-        log("Dashboard ready to view", "🎉")
+        log("Phase 2 complete")
+        log("Dashboard ready to view")
         return report, dashboard
-    
-    log("Dashboard generation failed", "❌")
+
+    log("Dashboard generation failed")
     return report, None
 
 
@@ -902,7 +942,7 @@ Then navigate to your quiz and start an attempt.
         # Display progress with current step highlighted
         for i, (label, done) in enumerate(steps):
             if done:
-                st.markdown(f"✅ ~~{label}~~")
+                st.markdown(f"~~{label}~~")
             elif i == current_step:
                 st.markdown(f"**→ {label}**")
             else:
@@ -1083,15 +1123,15 @@ def show_onboarding():
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.markdown("### 1️⃣ Connect")
+            st.markdown("### 1. Connect")
             st.markdown("Open your quiz in Chrome and connect the scanner to read the questions.")
 
         with col2:
-            st.markdown("### 2️⃣ Test")
+            st.markdown("### 2. Test")
             st.markdown("Run AI against your quiz to see how it performs.")
 
         with col3:
-            st.markdown("### 3️⃣ Analyze")
+            st.markdown("### 3. Analyze")
             st.markdown("Get a detailed report showing which questions are vulnerable.")
 
         st.markdown("---")
@@ -1116,7 +1156,7 @@ def show_onboarding():
                 st.session_state.chrome_ok = True
             else:
                 st.info("○ Waiting for browser...")
-                if st.button("🔄 Check Now", key="check_browser_onboarding"):
+                if st.button("Check Now", key="check_browser_onboarding"):
                     st.rerun()
 
         # Add refresh button if models are missing
@@ -1130,14 +1170,14 @@ def show_onboarding():
             ```
             Then click refresh:
             """)
-            if st.button("🔄 Refresh Status", use_container_width=False):
+            if st.button("Refresh Status", use_container_width=False):
                 check_ollama.clear()
                 st.rerun()
 
         # ===== Test a Single Question Section (available immediately if AI is ready) =====
         if text_model_ok:
             st.markdown("---")
-            st.markdown("### 🧪 Testing a Single Question")
+            st.markdown("### Testing a Single Question")
             st.markdown("Try testing a question right now — no browser setup needed.")
 
             with st.expander("Test a Question", expanded=False):
@@ -1163,7 +1203,7 @@ def show_onboarding():
                 with test_col2:
                     onboard_samples = st.number_input("Samples", min_value=1, max_value=5, value=1, key="onboard_samples")
 
-                if st.button("🧪 Test Question", type="primary", key="onboard_test_btn"):
+                if st.button("Test Question", type="primary", key="onboard_test_btn"):
                     if test_q_text and onboard_opt_a and onboard_opt_b:
                         options = {'A': onboard_opt_a, 'B': onboard_opt_b}
                         if onboard_opt_c: options['C'] = onboard_opt_c
@@ -1187,9 +1227,9 @@ def show_onboarding():
                             ai_answer = result.get('ai_answer', '?')
 
                             if is_correct:
-                                st.error(f"⚠️ AI answered correctly: **{ai_answer}** — This question may be vulnerable!")
+                                st.error(f"AI answered correctly: **{ai_answer}** — This question may be vulnerable!")
                             else:
-                                st.success(f"✅ AI answered incorrectly: **{ai_answer}** — Good resistance!")
+                                st.success(f"AI answered incorrectly: **{ai_answer}** — Good resistance!")
 
                             if onboard_samples > 1:
                                 st.caption(f"Consistency: {result.get('consistency', 'N/A')} | Avg confidence: {result.get('avg_confidence', 'N/A')}%")
@@ -1218,7 +1258,7 @@ def show_onboarding():
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("### 📊 Baseline Scan: Quiz without Course Materials")
+            st.markdown("### Baseline Scan: Quiz without Course Materials")
             st.markdown("""
             Test your quiz against AI using only general knowledge.
 
@@ -1234,7 +1274,7 @@ def show_onboarding():
                 st.rerun()
 
         with col2:
-            st.markdown("### 📚 Full Scan (Recommended)")
+            st.markdown("### Full Scan (Recommended)")
             st.markdown("""
             **Comprehensive vulnerability test**
 
@@ -1299,7 +1339,7 @@ def show_onboarding():
             st.success(f"✓ {rag_count} text chunks loaded from course materials")
 
         if uploaded_files:
-            if st.button("📥 Process Files", type="primary", use_container_width=True):
+            if st.button("Process Files", type="primary", use_container_width=True):
                 with st.spinner("Processing files..."):
                     try:
                         import chromadb
@@ -1404,6 +1444,23 @@ div[data-testid="stExpander"] .stMarkdown ul {
 }
 div[data-testid="stExpander"] .stMarkdown li {
     margin-bottom: 0.1rem;
+    line-height: 1.4;
+}
+
+/* Compact line spacing inside st.status() progress panels */
+div[data-testid="stStatusWidget"] .stMarkdown p {
+    margin-bottom: 0.15rem;
+    line-height: 1.35;
+    font-size: 0.875rem;
+}
+div[data-testid="stStatusWidget"] .stText {
+    margin-bottom: 0.1rem;
+    line-height: 1.3;
+    font-size: 0.875rem;
+}
+
+/* Compact spacing for bullet-point lists in scan tabs */
+div[data-testid="stVerticalBlock"] > div > .stMarkdown p {
     line-height: 1.4;
 }
 </style>""", unsafe_allow_html=True)
@@ -1668,7 +1725,7 @@ if tab2 is not None:
                 scan_description = "This scan uses only general AI knowledge—no course materials."
 
                 # Instructions for Full Assessment mode
-                with st.expander("📋 Instructions", expanded=True):
+                with st.expander("Instructions", expanded=True):
                     st.markdown("""
                     **Steps:**
                     1. Open your Moodle quiz in Chrome and start an attempt (or start preview)
@@ -1686,7 +1743,7 @@ if tab2 is not None:
                 scan_description = "This scan tests how well AI can answer your quiz using general knowledge."
 
                 # Instructions for Baseline Scan mode
-                with st.expander("📋 Instructions", expanded=True):
+                with st.expander("Instructions", expanded=True):
                     st.markdown("""
                     **Steps:**
                     1. Open your Moodle quiz in Chrome and start an attempt (or start preview)
@@ -1718,7 +1775,7 @@ if tab2 is not None:
                 col3.metric("Avg Confidence", f"{avg_conf}%")
 
                 if score['percentage'] >= 50:
-                    st.warning("⚠️ AI can pass with general knowledge alone.")
+                    st.warning("AI can pass with general knowledge alone.")
                 else:
                     st.success("✓ AI struggles without course materials.")
 
@@ -1755,18 +1812,14 @@ if tab2 is not None:
             elif st.session_state.no_rag_file:
                 st.success("✓ AI has filled in the answers")
 
-                st.markdown("""
-                **Now in Chrome:**
-                1. Review the answers if you'd like
-                2. Click **"Finish attempt"**
-                3. Click **"Submit all and finish"**
-                """)
+                st.markdown("**Now in Chrome:**")
+                st.markdown("1. Review the answers if you'd like\n2. Click **\"Finish attempt\"**\n3. Click **\"Submit all and finish\"**")
 
                 st.markdown("---")
 
                 st.markdown("**When you see the results page in Chrome:**")
 
-                if st.button("📥 Collect Results", key="get1", type="primary", use_container_width=True):
+                if st.button("Collect Results", key="get1", type="primary", use_container_width=True):
                     with st.spinner("Reading results from Chrome..."):
                         results = scrape_results()
                         score = save_results(st.session_state.no_rag_file, results)
@@ -1779,34 +1832,30 @@ if tab2 is not None:
 
                 st.markdown("---")
 
-                st.markdown("**Before you start:**")
-                st.markdown("• Make sure your quiz is open in Chrome")
-                st.markdown("• Navigate to the **first question**")
-                st.markdown("• The scanner will fill in answers automatically")
+                st.markdown("**Before you start:**\n- Make sure your quiz is open in Chrome\n- Navigate to the **first question**\n- The scanner will fill in answers automatically")
 
                 st.markdown("")
 
-                # Disable button while scanning
-                scan_disabled = st.session_state.is_scanning
-                button_label = "⏳ Scanning..." if scan_disabled else "▶️ Start Scan"
-
-                if st.button(button_label, type="primary", use_container_width=True, disabled=scan_disabled):
+                if st.button("Start Scan", type="primary", use_container_width=True):
                     st.session_state.is_scanning = True
                     clear_log()
-                    progress_placeholder = st.empty()
-
-                    try:
-                        output, q_count = run_quiz(use_rag=False)
-                        st.session_state.no_rag_file = output
-                        progress_placeholder.success(f"✓ Scan complete! {q_count} questions answered")
-                    finally:
-                        st.session_state.is_scanning = False
+                    st.session_state._scan_trigger = 'no_rag'
                     st.rerun()
 
         with right:
-            st.subheader("Activity")
-            with st.container(height=300):
-                show_activity()
+            if st.session_state.get('_scan_trigger') == 'no_rag':
+                st.subheader("Scan Progress")
+                try:
+                    with st.status("Starting scan...", expanded=True) as status:
+                        output, q_count = run_quiz(use_rag=False, status_container=status)
+                        status.update(label=f"Scan complete — {q_count} questions answered", state="complete", expanded=False)
+                    st.session_state.no_rag_file = output
+                except Exception as e:
+                    st.error(f"Scan failed: {str(e)}")
+                finally:
+                    st.session_state.is_scanning = False
+                    st.session_state._scan_trigger = None
+                st.rerun()
 
 
     # ----------------------------------------
@@ -1821,7 +1870,7 @@ if tab3 is not None:
             st.subheader("Second Scan: AI + Course Materials")
 
             # Instructions for Second Scan
-            with st.expander("📋 Instructions", expanded=True):
+            with st.expander("Instructions", expanded=True):
                 st.markdown("""
                 **Steps:**
                 1. Start a **new quiz attempt/preview** in Moodle (make sure the first question is visible)
@@ -1867,7 +1916,7 @@ if tab3 is not None:
                 col4.metric("Change vs Baseline", f"{change:+.0f}%")
 
                 if change > 10:
-                    st.warning("⚠️ Course materials significantly boost AI performance.")
+                    st.warning("Course materials significantly boost AI performance.")
                 elif change < 0:
                     st.success("✓ Course materials actually confused the AI!")
                 else:
@@ -1887,18 +1936,14 @@ if tab3 is not None:
             elif st.session_state.with_rag_file:
                 st.success("✓ AI has filled in the answers (with course materials)")
 
-                st.markdown("""
-                **Now in Chrome:**
-                1. Review the answers if you'd like
-                2. Click **"Finish attempt"**
-                3. Click **"Submit all and finish"**
-                """)
+                st.markdown("**Now in Chrome:**")
+                st.markdown("1. Review the answers if you'd like\n2. Click **\"Finish attempt\"**\n3. Click **\"Submit all and finish\"**")
 
                 st.markdown("---")
 
                 st.markdown("**When you see the results page in Chrome:**")
 
-                if st.button("📥 Collect Results", key="get2", type="primary", use_container_width=True):
+                if st.button("Collect Results", key="get2", type="primary", use_container_width=True):
                     with st.spinner("Reading results from Chrome..."):
                         results = scrape_results()
                         score = save_results(st.session_state.with_rag_file, results)
@@ -1909,38 +1954,30 @@ if tab3 is not None:
             else:
                 st.markdown("---")
 
-                st.markdown("**Before you start:**")
-                st.markdown("• Start a **new quiz attempt** in Moodle")
-                st.markdown("• Navigate to the **first question**")
-                st.markdown("• The scanner will use course materials to answer")
+                st.markdown("**Before you start:**\n- Start a **new quiz attempt** in Moodle\n- Navigate to the **first question**\n- The scanner will use course materials to answer")
 
                 st.markdown("")
 
-                # Disable button while scanning
-                scan_disabled = st.session_state.is_scanning
-                button_label = "⏳ Scanning..." if scan_disabled else "▶️ Start Second Scan"
-
-                if st.button(button_label, type="primary", use_container_width=True, disabled=scan_disabled):
+                if st.button("Start Second Scan", type="primary", use_container_width=True):
                     st.session_state.is_scanning = True
                     clear_log()
-
-                    # Create placeholder for progress display
-                    progress_placeholder = st.empty()
-
-                    try:
-                        output, q_count = run_quiz(use_rag=True)
-                        st.session_state.with_rag_file = output
-                        progress_placeholder.success(f"✓ Second scan complete! {q_count} questions answered with course materials")
-                    except Exception as e:
-                        progress_placeholder.error(f"Scan failed: {str(e)}")
-                    finally:
-                        st.session_state.is_scanning = False
+                    st.session_state._scan_trigger = 'with_rag'
                     st.rerun()
 
         with right:
-            st.subheader("Activity")
-            with st.container(height=300):
-                show_activity()
+            if st.session_state.get('_scan_trigger') == 'with_rag':
+                st.subheader("Scan Progress")
+                try:
+                    with st.status("Starting scan with course materials...", expanded=True) as status:
+                        output, q_count = run_quiz(use_rag=True, status_container=status)
+                        status.update(label=f"Scan complete — {q_count} questions answered with course materials", state="complete", expanded=False)
+                    st.session_state.with_rag_file = output
+                except Exception as e:
+                    st.error(f"Scan failed: {str(e)}")
+                finally:
+                    st.session_state.is_scanning = False
+                    st.session_state._scan_trigger = None
+                st.rerun()
 
 
 # ----------------------------------------
@@ -2045,7 +2082,7 @@ if tab4 is not None:
                     col1, col2 = st.columns(2)
                     with col1:
                         st.download_button(
-                            "📥 Download Dashboard (HTML)",
+                            "Download Dashboard (HTML)",
                             html,
                             "quiz_vulnerability_dashboard.html",
                             "text/html",
@@ -2055,7 +2092,7 @@ if tab4 is not None:
                         with open(st.session_state.report_file) as f:
                             report_data = f.read()
                         st.download_button(
-                            "📥 Download Report (JSON)",
+                            "Download Report (JSON)",
                             report_data,
                             "vulnerability_report.json", 
                             "application/json",
@@ -2094,117 +2131,108 @@ if tab4 is not None:
 
                     st.markdown("")
 
-                    if st.button("🔬 Generate Report", type="primary", use_container_width=True):
-                        clear_log()
-                        import subprocess
-
-                        log("Preparing scan results...", "📦")
-
-                        # Handle single-scan vs full-scan mode
-                        if is_full_scan_mode and st.session_state.with_rag_file:
-                            # Full scan mode - merge both files
-                            merged = merge_attempts(
-                                st.session_state.no_rag_file,
-                                st.session_state.with_rag_file,
-                                no_rag_score=st.session_state.no_rag_score,
-                                with_rag_score=st.session_state.with_rag_score
-                            )
-                        else:
-                            # Basic scan mode - use single file with score info
-                            merged = merge_attempts(
-                                st.session_state.no_rag_file,
-                                None,  # No second scan
-                                no_rag_score=st.session_state.no_rag_score,
-                                with_rag_score=None
-                            )
-                        st.session_state.merged_file = merged
-                    
-                        # Load to get question count
-                        with open(merged) as f:
-                            merged_data = json.load(f)
-                        total_q = len(merged_data.get('questions', []))
-                        log(f"Merged {total_q} questions", "✅")
-                    
-                        # Phase 1: Reform agent
-                        log("Phase 1: Classifying questions...", "🏷️")
-                    
-                        with st.spinner(f"Classifying {total_q} questions..."):
-                            result1 = subprocess.run(
-                                ['python3', 'reform_agent.py', merged, '--model', st.session_state.model],
-                                capture_output=True,
-                                text=True
-                            )
-                    
-                        # Parse reform_agent output for question-level logging
-                        for line in result1.stdout.split('\n'):
-                            line = line.strip()
-                            if "Classifying Question" in line:
-                                match = re.search(r'Question (\d+)', line)
-                                if match:
-                                    log(f"Classifying Q{match.group(1)}...", "🔍")
-                            elif "Type:" in line:
-                                qtype = line.split("Type:")[1].strip()
-                                log(f"  Type: {qtype}", "📝")
-                            elif "Vulnerability:" in line:
-                                vuln = line.split("Vulnerability:")[1].strip()
-                                icon = "🔴" if vuln == "HIGH" else "🟡" if vuln == "MODERATE" else "🟢" if vuln == "LOW" else "⚪"
-                                log(f"  Vulnerability: {vuln}", icon)
-                    
-                        report = merged.replace('.json', '_analysis_report.json')
-                        if not os.path.exists(report):
-                            # Try alternate filename in case reform_agent uses different naming
-                            alt_report = merged.replace('.json', '_vulnerability_report.json')
-                            if os.path.exists(alt_report):
-                                report = alt_report
-                            else:
-                                log("Classification failed", "❌")
-                                st.error(f"Reform agent failed.\n\nStderr: {result1.stderr[:500] if result1.stderr else 'None'}")
-                                st.stop()
-                    
-                        log("Phase 1 complete!", "✅")
-                    
-                        # Phase 2: Analysis agent
-                        log("Phase 2: Building dashboard...", "📊")
-                    
-                        with st.spinner("Generating dashboard..."):
-                            result2 = subprocess.run(
-                                ['python3', 'analysis_agent.py', report],
-                                capture_output=True,
-                                text=True
-                            )
-                    
-                        # Parse analysis_agent output
-                        for line in result2.stdout.split('\n'):
-                            line = line.strip()
-                            if "Calculating" in line:
-                                log("Calculating statistics...", "🔢")
-                            elif "LLM interpretation" in line.lower():
-                                log("Generating AI insights...", "🤖")
-                            elif "markdown" in line.lower() and "saved" in line.lower():
-                                log("Markdown summary created", "📄")
-                            elif "Dashboard saved" in line:
-                                log("HTML dashboard created", "🎨")
-                    
-                        # Dashboard is in DASHBOARDS_DIR
-                        report_path = Path(report)
-                        base_name = report_path.stem.replace('_analysis_report', '').replace('_vulnerability_report', '')
-                        dashboard = DASHBOARDS_DIR / f"{base_name}_dashboard.html"
-
-                        if dashboard.exists():
-                            log("Phase 2 complete!", "✅")
-                            log("Dashboard ready to view!", "🎉")
-                            st.session_state.report_file = report
-                        else:
-                            log("Dashboard generation had issues", "⚠️")
-                            st.warning(f"Dashboard not generated.\n\nStderr: {result2.stderr[:500] if result2.stderr else 'None'}")
-                            st.session_state.report_file = report
-                    
+                    if st.button("Generate Report", type="primary", use_container_width=True):
+                        st.session_state._scan_trigger = 'report'
                         st.rerun()
-            
+
                 with right:
-                    st.subheader("Activity")
-                    with st.container(height=350):
-                        show_activity()
+                    if st.session_state.get('_scan_trigger') == 'report':
+                        import subprocess
+                        st.subheader("Report Progress")
+                        try:
+                            with st.status("Preparing scan results...", expanded=True) as status:
+                                # Handle single-scan vs full-scan mode
+                                if is_full_scan_mode and st.session_state.with_rag_file:
+                                    merged = merge_attempts(
+                                        st.session_state.no_rag_file,
+                                        st.session_state.with_rag_file,
+                                        no_rag_score=st.session_state.no_rag_score,
+                                        with_rag_score=st.session_state.with_rag_score
+                                    )
+                                else:
+                                    merged = merge_attempts(
+                                        st.session_state.no_rag_file,
+                                        None,
+                                        no_rag_score=st.session_state.no_rag_score,
+                                        with_rag_score=None
+                                    )
+                                st.session_state.merged_file = merged
+
+                                with open(merged) as f:
+                                    merged_data = json.load(f)
+                                total_q = len(merged_data.get('questions', []))
+                                status.write(f"- Merged {total_q} questions")
+
+                                # Phase 1: Reform agent
+                                status.update(label="Phase 1: Classifying questions...")
+                                status.write("- Phase 1: Classifying question types...")
+
+                                result1 = subprocess.run(
+                                    ['python3', 'reform_agent.py', merged, '--model', st.session_state.model],
+                                    capture_output=True,
+                                    text=True
+                                )
+
+                                for line in result1.stdout.split('\n'):
+                                    line = line.strip()
+                                    if "Classifying Question" in line:
+                                        match = re.search(r'Question (\d+)', line)
+                                        if match:
+                                            status.write(f"- Classifying Q{match.group(1)}...")
+                                    elif "Type:" in line:
+                                        qtype = line.split("Type:")[1].strip()
+                                        status.write(f"  Type: {qtype}")
+                                    elif "Vulnerability:" in line:
+                                        vuln = line.split("Vulnerability:")[1].strip()
+                                        status.write(f"  Vulnerability: {vuln}")
+
+                                report = merged.replace('.json', '_analysis_report.json')
+                                if not os.path.exists(report):
+                                    alt_report = merged.replace('.json', '_vulnerability_report.json')
+                                    if os.path.exists(alt_report):
+                                        report = alt_report
+                                    else:
+                                        st.error(f"Reform agent failed.\n\nStderr: {result1.stderr[:500] if result1.stderr else 'None'}")
+                                        st.stop()
+
+                                status.write("- Phase 1 complete")
+
+                                # Phase 2: Analysis agent
+                                status.update(label="Phase 2: Generating dashboard...")
+                                status.write("- Phase 2: Generating dashboard...")
+
+                                result2 = subprocess.run(
+                                    ['python3', 'analysis_agent.py', report],
+                                    capture_output=True,
+                                    text=True
+                                )
+
+                                for line in result2.stdout.split('\n'):
+                                    line = line.strip()
+                                    if "Calculating" in line:
+                                        status.write("- Calculating statistics...")
+                                    elif "LLM interpretation" in line.lower():
+                                        status.write("- Generating AI interpretation...")
+                                    elif "markdown" in line.lower() and "saved" in line.lower():
+                                        status.write("- Markdown summary created")
+                                    elif "Dashboard saved" in line:
+                                        status.write("- HTML dashboard created")
+
+                                report_path = Path(report)
+                                base_name = report_path.stem.replace('_analysis_report', '').replace('_vulnerability_report', '')
+                                dashboard = DASHBOARDS_DIR / f"{base_name}_dashboard.html"
+
+                                if dashboard.exists():
+                                    status.write("- Phase 2 complete")
+                                    status.update(label="Report complete", state="complete", expanded=False)
+                                    st.session_state.report_file = report
+                                else:
+                                    status.update(label="Dashboard generation had issues", state="error", expanded=False)
+                                    st.warning(f"Dashboard not generated.\n\nStderr: {result2.stderr[:500] if result2.stderr else 'None'}")
+                                    st.session_state.report_file = report
+                        finally:
+                            st.session_state._scan_trigger = None
+                        st.rerun()
 
 
     # ----------------------------------------
@@ -2421,10 +2449,10 @@ Begin your analysis:"""
 
 if tab5 is not None:
     with tab5:
-        st.subheader("🧪 Test a Single Question")
+        st.subheader("Test a Single Question")
 
         # Show instructions at the top (matching the workflow description)
-        with st.expander("📋 Instructions", expanded=True):
+        with st.expander("Instructions", expanded=True):
             st.markdown("""
             **Steps:**
             1. Type or paste a quiz question with multiple choice options
@@ -2515,7 +2543,7 @@ if tab5 is not None:
             with test_cols[3]:
                 st.write("")  # Spacing
                 testing_disabled = st.session_state.is_testing
-                test_btn_label = "⏳ Testing..." if testing_disabled else "🧪 Test Question"
+                test_btn_label = "Testing..." if testing_disabled else "Test Question"
                 test_button = st.button(test_btn_label, type="primary", use_container_width=True, disabled=testing_disabled)
 
             if test_button and question_text:
@@ -2572,10 +2600,10 @@ if tab5 is not None:
             
                 # Main result
                 if is_correct:
-                    st.error(f"### ⚠️ AI Correct: {ai_answer}")
+                    st.error(f"### AI Correct: {ai_answer}")
                     st.caption("This question is VULNERABLE")
                 elif is_correct is False:
-                    st.success(f"### ✅ AI Wrong: {ai_answer}")
+                    st.success(f"### AI Wrong: {ai_answer}")
                     st.caption("AI answered incorrectly - good resistance!")
                 else:
                     st.warning(f"### AI answered: {ai_answer}")
@@ -2624,9 +2652,9 @@ if tab5 is not None:
                     st.progress(confidence / 100)
 
                     if confidence >= 80 and not is_correct:
-                        st.warning("⚠️ High confidence but wrong - AI is confidently incorrect!")
+                        st.warning("High confidence but wrong - AI is confidently incorrect!")
                     elif confidence >= 80 and is_correct:
-                        st.error("🚨 High confidence AND correct - very vulnerable!")
+                        st.error("High confidence AND correct - very vulnerable!")
 
                     # Reasoning and full response only for single sample
                     if result.get('reasoning'):
@@ -2638,9 +2666,9 @@ if tab5 is not None:
 
                 # RAG indicator
                 if result.get('used_rag'):
-                    st.caption("📚 Tested with course materials")
+                    st.caption("Tested with course materials")
                 else:
-                    st.caption("🧠 Tested with general knowledge only")
+                    st.caption("Tested with general knowledge only")
 
 
 # ----------------------------------------
@@ -2654,7 +2682,7 @@ if tab6 is not None:
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("### 📚 Course Materials")
+            st.markdown("### Course Materials")
 
             # Get existing collections
             all_collections = get_all_rag_collections()
@@ -2667,7 +2695,7 @@ if tab6 is not None:
             st.caption("Each course has its own set of materials. Select an existing course or create a new one.")
 
             # Create new collection option
-            with st.expander("➕ Create New Course", expanded=len(all_collections) == 0):
+            with st.expander("Create New Course", expanded=len(all_collections) == 0):
                 new_name = st.text_input(
                     "Course name",
                     placeholder="e.g., PSYC101, Biology 200, History Fall 2024",
@@ -2714,7 +2742,7 @@ if tab6 is not None:
                     # Show files in collection
                     files = get_collection_files(selected_coll['name'])
                     if files:
-                        with st.expander(f"📁 Files in {selected} ({len(files)} files)"):
+                        with st.expander(f"Files in {selected} ({len(files)} files)"):
                             for filename, chunk_count in files.items():
                                 st.text(f"  • {filename} ({chunk_count} chunks)")
             else:
@@ -2740,7 +2768,7 @@ if tab6 is not None:
                 )
 
                 if uploaded_files:
-                    if st.button("📥 Add to Course", type="primary", key="add_to_collection_btn"):
+                    if st.button("Add to Course", type="primary", key="add_to_collection_btn"):
                         try:
                             import chromadb
                             client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
@@ -2798,7 +2826,7 @@ if tab6 is not None:
             # ========================================
             # STEP 3: Manage Collections
             # ========================================
-            with st.expander("🗑️ Delete Course", expanded=False):
+            with st.expander("Delete Course", expanded=False):
                 st.warning("**Warning:** This permanently deletes all materials in the selected course.")
                 if all_collections:
                     delete_target = st.selectbox(
@@ -2806,7 +2834,7 @@ if tab6 is not None:
                         collection_names,
                         key="delete_collection_selector"
                     )
-                    if st.button(f"🗑️ Delete {delete_target}", type="secondary"):
+                    if st.button(f"Delete {delete_target}", type="secondary"):
                         try:
                             import chromadb
                             client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
@@ -2822,7 +2850,7 @@ if tab6 is not None:
                             st.error(f"Error: {e}")
 
         with col2:
-            st.markdown("### 🤖 AI Models")
+            st.markdown("### AI Models")
 
             # Show available models
             st.caption("Currently selected model:")
@@ -2866,7 +2894,7 @@ if tab6 is not None:
                 st.info("Make sure Ollama is running: `ollama serve`")
 
             st.markdown("---")
-            st.markdown("### 📁 Output Locations")
+            st.markdown("### Output Locations")
             st.caption("Generated files are saved to:")
             st.code(f"""
     Raw attempts: output/raw_attempts/
@@ -2875,7 +2903,7 @@ if tab6 is not None:
             """)
 
             st.markdown("---")
-            st.markdown("### 🔄 Scan Mode")
+            st.markdown("### Scan Mode")
 
             current_mode = "Complete Assessment (2 scans)" if st.session_state.use_rag_mode else "Baseline Scan (1 scan)"
             st.caption(f"Current mode: **{current_mode}**")
@@ -2892,8 +2920,8 @@ if tab6 is not None:
                     st.rerun()
 
             st.markdown("---")
-            st.markdown("### 🎓 Help & Onboarding")
-            if st.button("📖 Show Welcome Screen Again"):
+            st.markdown("### Help & Onboarding")
+            if st.button("Show Welcome Screen Again"):
                 st.session_state.onboarding_complete = False
                 st.session_state.onboarding_step = 1
                 st.rerun()

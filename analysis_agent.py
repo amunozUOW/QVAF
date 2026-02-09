@@ -42,59 +42,32 @@ def safe_pct(numerator, denominator, decimals=1):
     return round(safe_div(numerator, denominator, 0.0) * 100, decimals)
 
 def calculate_grades(results, actual_scores=None):
-    """Calculate AI correctness percentages.
+    """Calculate AI correctness percentages from per-question data.
+
+    Single data path: always computed from per-question results (authoritative
+    since Option D uses Moodle's is_correct). actual_scores is kept in the
+    report for reference but is no longer used for dashboard metrics.
 
     Returns dict with 'is_basic_mode' = True if only baseline scan was run.
     """
-    if actual_scores:
-        no_rag = actual_scores.get('no_rag_score') or {}
-        with_rag = actual_scores.get('with_rag_score')  # Can be None in basic mode
-
-        # Check if this is basic scan mode (no RAG scan)
-        is_basic_mode = with_rag is None
-
-        if is_basic_mode and no_rag.get('percentage') is not None:
-            # Basic scan mode - only baseline data
-            return {
-                'is_basic_mode': True,
-                'total': no_rag.get('total', len(results)),
-                'correct_without_rag': no_rag.get('correct', 0),
-                'correct_with_rag': None,
-                'grade_without_rag': no_rag['percentage'],
-                'grade_with_rag': None,
-                'rag_effect': None
-            }
-        elif no_rag.get('percentage') is not None and with_rag and with_rag.get('percentage') is not None:
-            # Full scan mode
-            return {
-                'is_basic_mode': False,
-                'total': no_rag.get('total', len(results)),
-                'correct_without_rag': no_rag.get('correct', 0),
-                'correct_with_rag': with_rag.get('correct', 0),
-                'grade_without_rag': no_rag['percentage'],
-                'grade_with_rag': with_rag['percentage'],
-                'rag_effect': round(with_rag['percentage'] - no_rag['percentage'], 1)
-            }
-
-    # Fallback to counting from results
     correct_without = sum(1 for r in results if r.get('correct_without_rag'))
-    correct_with = sum(1 for r in results if r.get('correct_with_rag'))
     total = len(results)
 
-    grade_without = safe_pct(correct_without, total)
-    grade_with = safe_pct(correct_with, total)
-
-    # Detect basic mode from results (no RAG answers)
+    # Detect basic mode from results (no RAG data available)
     has_rag_data = any(r.get('correct_with_rag') is not None for r in results)
+    correct_with = sum(1 for r in results if r.get('correct_with_rag')) if has_rag_data else None
+
+    grade_without = safe_pct(correct_without, total)
+    grade_with = safe_pct(correct_with, total) if correct_with is not None else None
 
     return {
         'is_basic_mode': not has_rag_data,
         'total': total,
         'correct_without_rag': correct_without,
-        'correct_with_rag': correct_with if has_rag_data else None,
+        'correct_with_rag': correct_with,
         'grade_without_rag': grade_without,
-        'grade_with_rag': grade_with if has_rag_data else None,
-        'rag_effect': round(grade_with - grade_without, 1) if has_rag_data else None
+        'grade_with_rag': grade_with,
+        'rag_effect': round(grade_with - grade_without, 1) if grade_with is not None else None
     }
 
 def calculate_grades_by_type(results):
@@ -121,19 +94,29 @@ def calculate_grades_by_type(results):
     return by_type
 
 def count_by_correctness_pattern(results):
-    """Count questions by AI correctness pattern"""
+    """Count questions by AI correctness pattern.
+
+    Handles basic mode (correct_with_rag is None) by counting questions
+    as simply correct/incorrect using correct_both and incorrect_both buckets.
+    """
     patterns = {
-        'correct_both': 0,      # AI correct without and with RAG
+        'correct_both': 0,      # AI correct without and with RAG (or just correct in basic mode)
         'correct_rag_only': 0,  # AI correct only with RAG
         'correct_baseline_only': 0,  # AI correct only without RAG
-        'incorrect_both': 0     # AI incorrect in both conditions
+        'incorrect_both': 0     # AI incorrect in both conditions (or just incorrect in basic mode)
     }
-    
+
     for r in results:
-        without = r.get('correct_without_rag', False)
-        with_rag = r.get('correct_with_rag', False)
-        
-        if without and with_rag:
+        without = r.get('correct_without_rag')
+        with_rag = r.get('correct_with_rag')
+
+        if with_rag is None:
+            # Basic mode — only baseline data, no pattern comparison possible
+            if without:
+                patterns['correct_both'] += 1
+            else:
+                patterns['incorrect_both'] += 1
+        elif without and with_rag:
             patterns['correct_both'] += 1
         elif with_rag and not without:
             patterns['correct_rag_only'] += 1
@@ -141,7 +124,7 @@ def count_by_correctness_pattern(results):
             patterns['correct_baseline_only'] += 1
         else:
             patterns['incorrect_both'] += 1
-    
+
     return patterns
 
 def count_confidence_levels(results):

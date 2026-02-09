@@ -110,23 +110,24 @@ def load_quiz_data(filepath):
 
 def check_correct(answer, correct_answer):
     """
-    Check if an answer matches the correct answer.
+    Check if an answer matches the correct answer (supplementary fallback).
+    Used only when Moodle's is_correct is not available.
     Handles various formats (letter only, "A. text", etc.)
     """
     if not answer or not correct_answer:
         return None
-    
+    if correct_answer == 'UNKNOWN':
+        return None
+
     # Extract just the letter
-    answer_letter = answer.strip()[0].upper() if answer else ""
-    correct_letter = correct_answer.strip()[0].upper() if correct_answer else ""
-    
+    answer_letter = answer.strip()[0].upper()
+    correct_letter = correct_answer.strip()[0].upper()
+
     # Direct letter comparison
     if answer_letter and correct_letter:
         return answer_letter == correct_letter
-    
+
     # Fallback to full string matching
-    if not answer or not correct_answer or correct_answer == 'UNKNOWN':
-        return None
     return answer.upper().strip() == correct_answer.upper().strip()
 
 
@@ -137,30 +138,44 @@ def check_correct(answer, correct_answer):
 def get_correctness_pattern(correct_without: bool, correct_with: bool) -> str:
     """
     Determine the DESCRIPTIVE correctness pattern based on AI performance.
-    
+
     IMPORTANT: These are DESCRIPTIONS, not vulnerability judgments.
     The SME interprets what these patterns mean for their context.
-    
+
     Returns one of:
-    - "CORRECT_BOTH": AI correct in both conditions
+    - "CORRECT_BOTH": AI correct in both conditions (or just correct in basic mode)
     - "CORRECT_RAG_ONLY": AI correct only with course materials
     - "CORRECT_BASELINE_ONLY": AI correct only without course materials (anomalous)
-    - "INCORRECT_BOTH": AI incorrect in both conditions
-    - "UNKNOWN": Unable to determine
+    - "INCORRECT_BOTH": AI incorrect in both conditions (or just incorrect in basic mode)
+    - "UNKNOWN": Unable to determine (both values are None)
     """
-    if correct_without is None or correct_with is None:
+    if correct_without is None and correct_with is None:
         return "UNKNOWN"
-    
+
+    if correct_with is None:
+        # Basic mode — only baseline data available
+        if correct_without:
+            return "CORRECT_BOTH"  # Treated as "correct" for basic mode
+        elif correct_without is False:
+            return "INCORRECT_BOTH"  # Treated as "incorrect" for basic mode
+        else:
+            return "UNKNOWN"
+
+    if correct_without is None:
+        # Edge case — only RAG data available
+        if correct_with:
+            return "CORRECT_RAG_ONLY"
+        else:
+            return "INCORRECT_BOTH"
+
     if correct_without and correct_with:
         return "CORRECT_BOTH"
     elif not correct_without and correct_with:
         return "CORRECT_RAG_ONLY"
-    elif not correct_without and not correct_with:
-        return "INCORRECT_BOTH"
     elif correct_without and not correct_with:
         return "CORRECT_BASELINE_ONLY"
-    
-    return "UNKNOWN"
+    else:
+        return "INCORRECT_BOTH"
 
 
 def get_pattern_description(pattern: str) -> str:
@@ -469,9 +484,15 @@ def process_quiz(filepath):
         reasoning_with = response_with.get('reasoning', '') if isinstance(response_with, dict) else q.get('reasoning_with_rag', '')
 
         
-        # Check correctness
-        correct_without = check_correct(answer_without, correct_answer)
-        correct_with = check_correct(answer_with, correct_answer)
+        # Check correctness — prefer Moodle's authoritative is_correct
+        correct_without = q.get('is_correct_without_rag')
+        correct_with = q.get('is_correct_with_rag')
+
+        # Fallback to letter comparison only when is_correct unavailable
+        if correct_without is None and answer_without and correct_answer != 'UNKNOWN':
+            correct_without = check_correct(answer_without, correct_answer)
+        if correct_with is None and answer_with and correct_answer != 'UNKNOWN':
+            correct_with = check_correct(answer_with, correct_answer)
         
         # Get correctness pattern (DESCRIPTIVE, not judgmental)
         pattern = get_correctness_pattern(correct_without, correct_with)

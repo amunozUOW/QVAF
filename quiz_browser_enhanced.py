@@ -588,7 +588,14 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
                     if radio:
                         label = item.query_selector('label')
                         text = label.inner_text().strip() if label else item.inner_text().strip()
-                        text = re.sub(r'^[a-zA-Z][\.\\)]\s*', '', text)
+                        # Strip option labels: A. B) 1. 2) I. II. III. i. ii. iii. etc.
+                        text = re.sub(
+                            r'^(?:[a-zA-Z][\.)\]]\s*'
+                            r'|[0-9]+[\.)\]]\s*'
+                            r'|(?:I{1,3}|IV|V|VI{0,3}|IX|X)[\.)\]]\s*'
+                            r'|(?:i{1,3}|iv|v|vi{0,3}|ix|x)[\.)\]]\s*'
+                            r')', '', text
+                        ).lstrip('\n').strip()
                         
                         if text and text not in seen_texts:
                             seen_texts.add(text)
@@ -694,22 +701,29 @@ def scrape_results(page, debug=False):
         try:
             qno_elem = q_elem.query_selector('.info .qno')
             q_num = qno_elem.inner_text().strip() if qno_elem else "?"
-            
-            # Check correctness
+
+            # Get question text (needed for text-based matching in merge)
+            qtext = q_elem.query_selector('.qtext')
+            q_text = qtext.inner_text().strip() if qtext else ""
+
+            # Check correctness from Moodle's CSS classes (authoritative)
             classes = q_elem.get_attribute('class') or ''
-            is_correct = 'correct' in classes and 'incorrect' not in classes
-            
-            # Get correct answer from feedback
-            correct_answer = None
+            if 'incorrect' in classes:
+                is_correct = False
+            elif 'correct' in classes:
+                is_correct = True
+            else:
+                is_correct = None  # Info block or unanswered
+
+            # Get correct answer feedback text (supplementary — for letter extraction)
+            correct_answer = ""
             feedback = q_elem.query_selector('.rightanswer')
             if feedback:
-                text = feedback.inner_text()
-                match = re.search(r'correct answer is[:\s]*([A-Z])', text, re.IGNORECASE)
-                if match:
-                    correct_answer = match.group(1).upper()
-            
+                correct_answer = feedback.inner_text().strip()
+
             results.append({
                 'number': q_num,
+                'question': q_text,
                 'is_correct': is_correct,
                 'correct_answer': correct_answer,
             })

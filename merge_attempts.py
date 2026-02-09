@@ -60,42 +60,49 @@ def find_matching_question(target_text, questions_list):
     return None
 
 
+def strip_label(text):
+    """Strip option label prefixes (A. 1. III. etc.) from text."""
+    return re.sub(
+        r'^(?:[a-zA-Z][\.)\]]\s*'
+        r'|[0-9]+[\.)\]]\s*'
+        r'|(?:I{1,3}|IV|V|VI{0,3}|IX|X)[\.)\]]\s*'
+        r'|(?:i{1,3}|iv|v|vi{0,3}|ix|x)[\.)\]]\s*'
+        r')', '', text
+    ).lstrip('\n').strip()
+
+
 def extract_correct_answer_letter(correct_answer_text, options):
     """
-    Try to match the correct answer text to an option letter.
+    Try to match the correct answer text to an option letter (supplementary).
     """
     if not correct_answer_text or not options:
         return None
-    
-    # Clean up the correct answer text
-    correct_text = correct_answer_text
-    
+
     # Remove common prefixes like "The correct answer is:"
-    correct_text = re.sub(r'^The correct answer is:?\s*', '', correct_text, flags=re.IGNORECASE)
-    correct_text = correct_text.strip()
-    
+    correct_text = re.sub(r'^The correct answer is:?\s*', '', correct_answer_text, flags=re.IGNORECASE)
+    correct_text = strip_label(correct_text)
+
     correct_lower = correct_text.lower()
-    
-    # Try exact match
+
+    # Try exact match (with label stripping on options)
     for letter, option_text in options.items():
-        if option_text.lower().strip() == correct_lower:
+        if strip_label(option_text).lower() == correct_lower:
             return letter
-    
+
     # Try partial match (option contains correct answer or vice versa)
     for letter, option_text in options.items():
-        opt_lower = option_text.lower().strip()
-        # Check if one contains the other (for multi-line answers)
-        if correct_lower in opt_lower or opt_lower in correct_lower:
+        opt_clean = strip_label(option_text).lower()
+        if correct_lower in opt_clean or opt_clean in correct_lower:
             return letter
         # Check first 50 chars
-        if correct_lower[:50] == opt_lower[:50]:
+        if correct_lower[:50] == opt_clean[:50]:
             return letter
-    
+
     # Check if correct_answer_text starts with a letter
     letter_match = re.match(r'^([A-Za-z])[\.\)\:]', correct_answer_text)
     if letter_match:
         return letter_match.group(1).upper()
-    
+
     return None
 
 
@@ -140,28 +147,37 @@ def merge_attempts(no_rag_data, with_rag_data):
         # Find matching results by text
         no_rag_result = find_matching_question(q_text, no_rag_results)
         with_rag_result = find_matching_question(q_text, with_rag_results)
-        
-        # Determine correct answer
+
+        # Authoritative correctness from Moodle CSS classes
+        is_correct_no_rag = no_rag_result.get('is_correct') if no_rag_result else None
+        is_correct_with_rag = with_rag_result.get('is_correct') if with_rag_result else None
+
+        # Supplementary: extract correct answer letter from feedback text
         correct_answer = "UNKNOWN"
-        
+
         if no_rag_result and no_rag_result.get('correct_answer'):
             correct_answer = extract_correct_answer_letter(
                 no_rag_result['correct_answer'], options
             ) or "UNKNOWN"
-        
+
         if correct_answer == "UNKNOWN" and with_rag_result and with_rag_result.get('correct_answer'):
             correct_answer = extract_correct_answer_letter(
                 with_rag_result['correct_answer'], options
             ) or "UNKNOWN"
-        
+
         print(f"  Correct answer: {correct_answer}")
-        
+        print(f"  Moodle is_correct (no-RAG): {is_correct_no_rag}")
+        if is_correct_with_rag is not None:
+            print(f"  Moodle is_correct (with-RAG): {is_correct_with_rag}")
+
         # Build merged question
         merged_q = {
             "id": question_id,
             "question": q_text,
             "options": options,
             "correct_answer": correct_answer,
+            "is_correct_without_rag": is_correct_no_rag,
+            "is_correct_with_rag": is_correct_with_rag,
             "response_without_rag": {
                 "answer": no_rag_q.get('llm_answer', ''),
                 "confidence": no_rag_q.get('llm_confidence', 0),
@@ -224,18 +240,22 @@ def print_summary(merged_data):
     if with_rag_score:
         print(f"With RAG:    {with_rag_score.get('correct', '?')}/{with_rag_score.get('total', '?')} ({with_rag_score.get('percentage', '?')}%)")
     
-    # Preview vulnerability categories
+    # Preview per-question results using authoritative is_correct
     print("\nQuestion Summary:")
     for q in questions:
         no_rag_ans = q['response_without_rag']['answer']
         with_rag_ans = q['response_with_rag']['answer']
         correct = q['correct_answer']
-        
-        no_rag_correct = no_rag_ans.upper() == correct.upper() if correct != "UNKNOWN" else "?"
-        with_rag_correct = with_rag_ans.upper() == correct.upper() if correct != "UNKNOWN" else "?"
-        
-        print(f"  Q{q['id']}: No-RAG={no_rag_ans} ({'✓' if no_rag_correct == True else '✗' if no_rag_correct == False else '?'}), "
-              f"With-RAG={with_rag_ans} ({'✓' if with_rag_correct == True else '✗' if with_rag_correct == False else '?'}), "
+
+        # Use Moodle's is_correct (authoritative)
+        ic_no_rag = q.get('is_correct_without_rag')
+        ic_with_rag = q.get('is_correct_with_rag')
+
+        no_rag_mark = '✓' if ic_no_rag is True else '✗' if ic_no_rag is False else '?'
+        with_rag_mark = '✓' if ic_with_rag is True else '✗' if ic_with_rag is False else '?'
+
+        print(f"  Q{q['id']}: No-RAG={no_rag_ans} ({no_rag_mark}), "
+              f"With-RAG={with_rag_ans} ({with_rag_mark}), "
               f"Correct={correct}")
 
 
