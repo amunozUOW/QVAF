@@ -25,6 +25,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from collections import Counter
+from parsing_utils import parse_llm_response
 
 try:
     from playwright.sync_api import sync_playwright
@@ -417,24 +418,8 @@ where X is one of the options ({letters_str}) and N is a number from 0 to 100.
 Your response:"""
 
 
-def parse_llm_response(text):
-    answer_match = re.search(r'ANSWER:\s*([A-Za-z])', text)
-    confidence_match = re.search(r'CONFIDENCE:\s*(\d+)', text)
-    reasoning_match = re.search(r'REASONING:\s*(.+?)(?=\n\n|\Z)', text, re.DOTALL)
-    
-    answer = answer_match.group(1).upper() if answer_match else None
-    confidence = int(confidence_match.group(1)) if confidence_match else 50
-    reasoning = reasoning_match.group(1).strip() if reasoning_match else text[:200]
-    
-    # Fallback answer extraction
-    if not answer:
-        first_letter = re.search(r'^([A-Z])\b', text.strip())
-        if first_letter:
-            answer = first_letter.group(1)
-        else:
-            answer = "A"  # Default fallback
-    
-    return answer, confidence, reasoning
+# parse_llm_response() is now imported from parsing_utils.py
+# This centralises the parsing logic so it's tested and consistent everywhere.
 
 
 def call_llm_single(prompt, model):

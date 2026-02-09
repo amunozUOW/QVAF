@@ -26,6 +26,7 @@ Usage:
 import re
 from collections import Counter
 from typing import Optional, Callable
+from parsing_utils import extract_answer, extract_reasoning
 
 try:
     import ollama
@@ -75,31 +76,11 @@ REASONING: [One sentence explaining why]"""
         )
         
         text = response['message']['content']
-        
-        # Parse answer
-        answer_match = re.search(r'ANSWER:\s*([A-Ea-e])', text)
-        if answer_match:
-            answer = answer_match.group(1).upper()
-        else:
-            # Fallback parsing
-            alt_patterns = [
-                r'(?:answer|select|choose)[:\s]*([A-Ea-e])\b',
-                r'\b([A-E])\s*(?:is correct|is the (?:best|correct))',
-                r'FINAL.*?([A-E])\b',
-            ]
-            answer = None
-            for pattern in alt_patterns:
-                alt_match = re.search(pattern, text, re.IGNORECASE)
-                if alt_match:
-                    answer = alt_match.group(1).upper()
-                    break
-            if not answer:
-                answer = "?"
-        
-        # Parse reasoning
-        reasoning_match = re.search(r'REASONING:\s*(.+?)(?:\n|$)', text, re.DOTALL)
-        reasoning = reasoning_match.group(1).strip() if reasoning_match else ""
-        
+
+        # Parse using shared parsing utilities
+        answer = extract_answer(text)
+        reasoning = extract_reasoning(text)
+
         return answer, reasoning
         
     except Exception as e:

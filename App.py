@@ -26,6 +26,7 @@ from pathlib import Path
 # CONFIGURATION (imported from central config)
 # ============================================
 
+from parsing_utils import parse_llm_response, extract_answer, extract_confidence, extract_reasoning
 from config import (
     PROJECT_ROOT, OUTPUT_DIR, RAW_ATTEMPTS_DIR, REPORTS_DIR, DASHBOARDS_DIR,
     MOODLE_URL_PATTERNS, EXCLUDE_URL_PATTERNS, AVAILABLE_MODELS,
@@ -2334,14 +2335,8 @@ Begin your analysis:"""
             
             text = response['message']['content']
             
-            # Parse response
-            answer_match = re.search(r'ANSWER:\s*([A-Ea-e])', text)
-            conf_match = re.search(r'CONFIDENCE:\s*(\d+)', text)
-            reasoning_match = re.search(r'REASONING:\s*(.+?)(?:\n|$)', text, re.DOTALL)
-            
-            ai_answer = answer_match.group(1).upper() if answer_match else "?"
-            confidence = int(conf_match.group(1)) if conf_match else 0
-            reasoning = reasoning_match.group(1).strip() if reasoning_match else ""
+            # Parse response using shared parsing utilities
+            ai_answer, confidence, reasoning = parse_llm_response(text)
             
             is_correct = ai_answer == correct_answer.upper() if correct_answer else None
             
@@ -2376,21 +2371,9 @@ Begin your analysis:"""
 
                 text = response['message']['content']
 
-                answer_match = re.search(r'ANSWER:\s*([A-Ea-e])', text)
-                if answer_match:
-                    answer = answer_match.group(1).upper()
-                else:
-                    for pattern in [r'(?:answer|select)[:\s]*([A-Ea-e])\b']:
-                        m = re.search(pattern, text, re.IGNORECASE)
-                        if m:
-                            answer = m.group(1).upper()
-                            break
-                    else:
-                        answer = "?"
-
-                # Extract confidence for this sample
-                conf_match = re.search(r'CONFIDENCE:\s*(\d+)', text)
-                conf = int(conf_match.group(1)) if conf_match else 0
+                # Parse using shared parsing utilities
+                answer = extract_answer(text)
+                conf = extract_confidence(text)
 
                 answers.append(answer)
                 confidences.append(conf)
@@ -2403,9 +2386,9 @@ Begin your analysis:"""
                 })
 
                 if not reasonings:
-                    rm = re.search(r'REASONING:\s*(.+?)(?:\n|$)', text, re.DOTALL)
-                    if rm:
-                        reasonings.append(rm.group(1).strip()[:200])
+                    r_text = extract_reasoning(text)
+                    if r_text:
+                        reasonings.append(r_text[:200])
 
             # Clear progress
             st.session_state.test_sample_progress = None
