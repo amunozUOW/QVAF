@@ -313,16 +313,28 @@ def analyse_question(question_text, options, correct_answer,
                      correctness_pattern, question_type, confidence_flag,
                      is_basic_mode=False):
     """
-    Generate analysis for SME review.
+    Generate per-question vulnerability analysis for the educator.
 
-    NOTE: This generates INFORMATIONAL analysis, not prescriptive recommendations.
-    The SME decides what action to take based on this information.
+    Acts as an objective third-party advisor: identifies what made the question
+    easy or difficult for AI, and recommends concrete changes to reduce AI
+    confidence or correctness. The educator decides what action to take.
 
     is_basic_mode: When True, only baseline (no RAG) data is shown.
     """
 
     options_text = "\n".join([f"{k}. {v}" for k, v in options.items()]) if options else "N/A"
     pattern_desc = get_pattern_description(correctness_pattern)
+
+    # System message establishing the agent's role and perspective
+    system_message = """You are an objective, third-party assessment vulnerability advisor working on behalf of an educator. Your role is to help the educator understand how and why an AI was able (or unable) to answer their quiz questions correctly.
+
+YOUR PERSPECTIVE:
+- You are NOT coaching the AI or helping it improve. You are advising the EDUCATOR.
+- Your goal is to help the educator identify what made a question easy or difficult for the AI.
+- Your recommendations should focus on how to REDUCE AI confidence and REDUCE the likelihood that AI will arrive at the correct answer, so that the assessment better measures genuine student understanding.
+- You are unbiased and evidence-driven. You do not advocate for the AI or soften findings about AI capabilities.
+- When the AI got a question right, explain what structural or content features allowed it to succeed, and suggest how those features could be altered.
+- When the AI got a question wrong, explain what made the question resistant to AI and what properties the educator should preserve or replicate in other questions."""
 
     if is_basic_mode:
         # Basic mode prompt - no RAG/course materials section
@@ -346,23 +358,24 @@ AI PERFORMANCE:
 AI RESULT: {"CORRECT" if correctness_pattern in ['CORRECT_BOTH', 'CORRECT_BASELINE_ONLY'] else "INCORRECT"}
 {f"ATTENTION: {confidence_flag}" if confidence_flag else ""}
 
-Based on this information, provide:
+Analyse this question from the educator's perspective. Your job is to help them understand what made this question easy or difficult for the AI, and what they could change to reduce AI performance on it.
 
-1. PERFORMANCE ANALYSIS (2-3 sentences):
-   - What does the AI performance suggest about this question?
-   - Was the reasoning used by the AI sufficient to arrive at the correct answer, or did it rely on patterns that may not reflect true understanding?
-   - How might the question type ({question_type}) relate to AI performance?
+1. VULNERABILITY ANALYSIS (2-3 sentences):
+   - What specific features of this question (structure, content, option design, cognitive demand) made it easy or difficult for the AI?
+   - Did the AI's reasoning reveal genuine understanding, or did it exploit surface-level patterns, common phrasing, or process-of-elimination to arrive at the answer?
+   - How does the question type ({question_type}) contribute to or protect against AI success?
 
-2. CONSIDERATIONS FOR SME:
-   - What factors should the educator consider when reviewing this question?
-   - Note: Do NOT make prescriptive recommendations. Present options neutrally.
+2. RECOMMENDATIONS FOR EDUCATOR:
+   - What concrete changes could the educator make to this question to reduce AI confidence or reduce the likelihood of AI selecting the correct answer?
+   - If the AI already failed on this question, what properties of the question should the educator preserve or replicate in other questions?
+   - Focus on actionable, specific suggestions (e.g., requiring application of local/unpublished context, adding plausible distractors, requiring multi-step reasoning, embedding scenario-specific details).
 
 Format your response as:
-PERFORMANCE ANALYSIS:
+VULNERABILITY ANALYSIS:
 [your analysis]
 
-CONSIDERATIONS FOR SME:
-[factors to consider]
+RECOMMENDATIONS FOR EDUCATOR:
+[your recommendations]
 """
     else:
         # Full mode prompt - includes RAG comparison
@@ -392,28 +405,31 @@ CORRECTNESS PATTERN: {correctness_pattern}
 ({pattern_desc})
 {f"ATTENTION: {confidence_flag}" if confidence_flag else ""}
 
-Based on this information, provide:
+Analyse this question from the educator's perspective. Your job is to help them understand what made this question easy or difficult for the AI, and what they could change to reduce AI performance on it.
 
-1. PERFORMANCE ANALYSIS (2-3 sentences):
-   - What does the AI performance pattern suggest about this question?
-   - Was the reasoning used by the AI sufficient to arrive at the correct answer, or did it rely on patterns that may not reflect true understanding?
-   - How might the question type ({question_type}) relate to AI performance?
+1. VULNERABILITY ANALYSIS (2-3 sentences):
+   - What specific features of this question (structure, content, option design, cognitive demand) made it easy or difficult for the AI?
+   - Did the AI's reasoning reveal genuine understanding, or did it exploit surface-level patterns, common phrasing, or process-of-elimination to arrive at the answer?
+   - What does the difference (or lack of difference) between baseline and RAG performance tell the educator about this question's reliance on general knowledge vs. course-specific content?
+   - How does the question type ({question_type}) contribute to or protect against AI success?
 
-2. CONSIDERATIONS FOR SME:
-   - What factors should the educator consider when reviewing this question?
-   - Note: Do NOT make prescriptive recommendations. Present options neutrally.
+2. RECOMMENDATIONS FOR EDUCATOR:
+   - What concrete changes could the educator make to this question to reduce AI confidence or reduce the likelihood of AI selecting the correct answer?
+   - If the AI already failed on this question, what properties of the question should the educator preserve or replicate in other questions?
+   - Focus on actionable, specific suggestions (e.g., requiring application of local/unpublished context, adding plausible distractors, requiring multi-step reasoning, embedding scenario-specific details).
 
 Format your response as:
-PERFORMANCE ANALYSIS:
+VULNERABILITY ANALYSIS:
 [your analysis]
 
-CONSIDERATIONS FOR SME:
-[factors to consider]
+RECOMMENDATIONS FOR EDUCATOR:
+[your recommendations]
 """
     
     try:
         global ANALYSIS_MODEL
         response = ollama.chat(model=ANALYSIS_MODEL, messages=[
+            {'role': 'system', 'content': system_message},
             {'role': 'user', 'content': prompt}
         ])
         return response['message']['content']
