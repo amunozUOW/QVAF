@@ -2073,7 +2073,7 @@ if tab4 is not None:
                         break
 
                 if dashboard and dashboard.exists():
-                    st.subheader("Detailed Analysis")
+                    st.subheader("Vulnerability Assessment Report")
                 
                     with open(dashboard) as f:
                         html = f.read()
