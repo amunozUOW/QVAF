@@ -278,7 +278,6 @@ def run_quiz(use_rag=False, status_container=None):
     )
     
     q_count = 0
-    total_questions = None
 
     def update(message):
         """Log message and write to live status container if available."""
@@ -299,12 +298,9 @@ def run_quiz(use_rag=False, status_container=None):
                 # New question starting
                 q_count += 1
                 q_preview = progress_msg.split(":", 1)[1][:40].strip()
-                progress_label = f"Q{q_count}"
-                if total_questions:
-                    progress_label = f"Q{q_count}/{total_questions}"
-                update(f"{progress_label}: {q_preview}")
+                update(f"Q{q_count}: {q_preview}")
                 if status_container:
-                    status_container.update(label=f"Answering question {q_count}" + (f" of {total_questions}" if total_questions else ""))
+                    status_container.update(label=f"Answering question {q_count}")
 
             elif "AI thinking" in progress_msg:
                 update(f"AI analyzing Q{q_count}...")
@@ -331,11 +327,8 @@ def run_quiz(use_rag=False, status_container=None):
                 link_count = match.group(1) if match else "1"
                 update(f"Q{q_count}: Following {link_count} link(s)...")
 
-            elif "Found" in progress_msg and "questions" in progress_msg:
-                match = re.search(r'Found\s+(\d+)\s+questions', progress_msg)
-                if match:
-                    total_questions = match.group(1)
-                    update(f"Found {total_questions} questions")
+            elif "Reading quiz questions" in progress_msg:
+                update("Reading quiz questions...")
 
             elif "Page complete" in progress_msg:
                 match = re.search(r'(\d+)\s+questions answered', progress_msg)
@@ -1446,6 +1439,12 @@ div[data-testid="stExpander"] .stMarkdown ul {
 div[data-testid="stExpander"] .stMarkdown li {
     margin-bottom: 0.1rem;
     line-height: 1.4;
+}
+
+/* Fixed-height scrollable container for st.status() progress panels */
+div[data-testid="stStatusWidget"] > div[data-testid="stVerticalBlock"] {
+    max-height: 400px;
+    overflow-y: auto;
 }
 
 /* Compact line spacing inside st.status() progress panels */

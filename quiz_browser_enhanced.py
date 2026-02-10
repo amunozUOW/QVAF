@@ -536,7 +536,7 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
 
     question_elements = page.query_selector_all('div.que')
     total_questions = len([q for q in question_elements if q.query_selector('.qtext')])
-    print(f"[PROGRESS] Found {total_questions} questions on this page", flush=True)
+    print(f"[PROGRESS] Reading quiz questions", flush=True)
 
     for q_elem in question_elements:
         try:
