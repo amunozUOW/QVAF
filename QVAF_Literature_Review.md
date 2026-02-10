@@ -12,19 +12,19 @@ The shift from policing AI use to redesigning assessment has been formally codif
 
 Lodge, Howard, Bearman, Dawson, and Associates (2023) authored *Assessment Reform for the Age of Artificial Intelligence* for TEQSA, establishing two core principles: assessment must "equip students to participate ethically and actively in a society where AI is ubiquitous," and forming trustworthy judgments about learning "requires multiple, inclusive and contextualised approaches to assessment." The document explicitly states that **detection alone is insufficient**—assessment must be redesigned to seek evidence of learning rather than police AI use.
 
-The 2025 follow-up, *Enacting Assessment Reform in a Time of Artificial Intelligence* (Lodge et al., 2025), translates principles into **three strategic pathways**: (1) program-wide reform that treats assessment as a connected system across entire degrees, (2) unit-level assurance embedding at least one secure assessment (interactive oral, in-class demonstration, or exam) within every unit, and (3) hybrid approaches combining both strategies. The document's framing is direct: "Rather than investing in a technological arms race of detection, the focus must shift to systemic assessment redesign."
+The 2025 follow-up, *Enacting Assessment Reform in a Time of Artificial Intelligence* (Lodge et al., 2025), translates principles into **three strategic pathways**: (1) program-wide reform that treats assessment as a connected system across entire degrees, (2) unit-level assurance embedding at least one secure assessment (interactive oral, in-class demonstration, or exam) within every unit, and (3) hybrid approaches combining both strategies. The document emphasises systemic assessment redesign over detection-based approaches.
 
 ### International Regulatory Bodies Converge on Similar Conclusions
 
 The UK Quality Assurance Agency's *Reconsidering Assessment for the ChatGPT Era* (QAA, 2023) provides comprehensive guidance emphasizing **program-level assessment strategy redesign** rather than individual task policing. QAA advocates for authentic assessments with synoptic elements, recommends reducing assessment volume to create space for AI literacy development, and frames the AI moment as "a generational incentive for providers to require their programme and module teams to review and, where necessary, reimagine assessment strategies."
 
-US regional accreditors have been more cautious. SACSCOC's December 2024 guidance on *Artificial Intelligence in Accreditation* focuses primarily on institutional accreditation processes rather than student assessment design, warning against over-reliance on AI for report creation. The Council of Regional Accrediting Commissions (C-RAC) issued a joint statement in October 2025 addressing AI for student guidance but providing less prescriptive assessment guidance than Australian or UK counterparts.
+US regional accreditors have been more cautious. SACSCOC's December 2024 guidance on *Artificial Intelligence in Accreditation* focuses primarily on institutional accreditation processes rather than student assessment design, warning against over-reliance on AI for report creation. The Council of Regional Accrediting Commissions (C-RAC) issued a joint statement in October 2025 addressing AI applications for credit transfer and learning evaluation, providing less prescriptive assessment guidance than Australian or UK counterparts.
 
 ### Academic Literature Supports Structural Over Discursive Approaches
 
 Corbin, Dawson, and Liu (2025) provide the most direct theoretical support for structural assessment change in "Talk is cheap: why structural assessment changes are needed for a time of GenAI" (*Assessment & Evaluation in Higher Education*). Their central argument distinguishes between **discursive changes** (rules, permissions, declarations) and **structural changes** (fundamental redesign of assessment mechanics). They write: "These frameworks remain powerless to prevent AI use when they rely solely on student compliance. They say much but change little. They direct behaviour they cannot monitor. They prohibit actions they cannot detect."
 
-The AI Assessment Scale (AIAS) developed by Perkins, Furze, Roe, and MacVaugh (2024) in the *Journal of University Teaching and Learning Practice* has been adopted by over **250 institutions across 30+ language translations** and is noted by TEQSA as an implementation option. The revised framework (Perkins, Roe, & Furze, 2024) explicitly acknowledges that "permitting any use of AI effectively permits all use of AI" due to undetectability, grounding the scale in social constructivist principles rather than enforcement mechanisms.
+The AI Assessment Scale (AIAS) developed by Perkins, Furze, Roe, and MacVaugh (2024) in the *Journal of University Teaching and Learning Practice* has been adopted by **hundreds of institutions across 30+ language translations** and is noted by TEQSA as an implementation option. The revised framework (Perkins, Roe, & Furze, 2024) explicitly acknowledges that "permitting any use of AI effectively permits all use of AI" due to undetectability, grounding the scale in social constructivist principles rather than enforcement mechanisms.
 
 **Seminal sources**: TEQSA's 2023 and 2025 guidance documents represent foundational regulatory texts for Australian contexts; Corbin, Dawson & Liu (2025) provides the theoretical underpinning for structural change; Perkins et al.'s AIAS offers practical implementation frameworks.
 
@@ -38,15 +38,17 @@ A growing body of empirical research demonstrates that **LLMs perform significan
 
 ### Meta-Analyses Establish the Performance Gradient
 
-Newton, Da Silva, and Berry (2024) conducted a pragmatic scoping review of ChatGPT performance on MCQ examinations in *Assessment & Evaluation in Higher Education*, analyzing **53 studies with 114 question sets totaling 49,014 MCQs**. Their findings establish clear capability thresholds: GPT-3/3.5 performed better than random guessing but failed most examinations, while GPT-4 passed most examinations with performance on par with human subjects. Crucially, they found statistically significant better performance in **lower cognitive domains** (Remember and Understand) compared to higher domains (Apply and Analyze) for GPT-3.5 (P=0.041), GPT-4 (P=0.003), and Google's Bard (P=0.017).
+Newton and Xiromeriti (2024) conducted a pragmatic scoping review of ChatGPT performance on MCQ examinations in *Assessment & Evaluation in Higher Education*, analyzing **53 studies with 114 question sets totaling 49,014 MCQs**. Their findings establish clear capability thresholds: GPT-3/3.5 performed better than random guessing but failed most examinations, while GPT-4 passed most examinations with performance on par with human subjects.
 
-A 2024 systematic review of medical licensing examinations published in the *Journal of Medical Internet Research* (Sallam et al., 2024; 45 studies, January 2022–March 2024) quantified this further: GPT-4 achieved **81% overall accuracy** (95% CI 78-84) compared to GPT-3.5's **58%** (95% CI 53-63). GPT-4 passed 26 of 29 medical examinations and outperformed average medical students in 13 of 17 direct comparisons.
+A separate 2024 study on medical licensing examinations by Sallam, Al-Salahat, Almhdawi, and colleagues, published in *Advances in Medical Education and Practice*, found statistically significant better performance in **lower cognitive domains** (Remember and Understand) compared to higher domains (Apply and Analyze) for GPT-3.5 (P=0.041), GPT-4 (P=0.003), and Google's Bard (P=0.017).
+
+Liu, Okuhara, Chang, and colleagues (2024) conducted a systematic review and meta-analysis of ChatGPT performance on medical licensing examinations worldwide, published in the *Journal of Medical Internet Research* (45 studies, January 2022–March 2024). They found GPT-4 achieved **81% overall accuracy** (95% CI 78-84) compared to GPT-3.5's **58%** (95% CI 53-63). GPT-4 passed 26 of 29 medical examinations and outperformed average medical students in 13 of 17 direct comparisons.
 
 ### Bloom's Taxonomy Correlates Directly With AI Performance
 
 Huber and Niklaus (2025) provide the most direct analysis in "LLMs meet Bloom's Taxonomy: A Cognitive View on Large Language Model Evaluations" (*Proceedings of COLING 2025*). Their central finding—"LLMs generally perform better on the lower end of Bloom's Taxonomy"—is supported by analysis showing **significant gaps in benchmark coverage** of higher cognitive skills. Testing GPT-4, GPT-4o, Claude 3, and Llama 3, they document consistent performance degradation as cognitive complexity increases.
 
-Herrmann-Werner and colleagues (2024) tested this pattern using real medical school examinations in "Assessing ChatGPT's Mastery of Bloom's Taxonomy Using Psychosomatic Medicine Exam Questions" (*Journal of Medical Internet Research*). GPT-4 achieved **93% accuracy** with detailed prompts across 307 MCQs, but error analysis revealed characteristic patterns: **29 of 68 errors** occurred at the Remember level (failing to recall specific facts) and **23 errors** at the Understand level (misunderstanding conceptual relationships).
+Herrmann-Werner and colleagues (2024) tested this pattern using real medical school examinations in "Assessing ChatGPT's Mastery of Bloom's Taxonomy Using Psychosomatic Medicine Exam Questions" (*Journal of Medical Internet Research*). GPT-4 achieved **92.5% accuracy** with detailed prompts across 307 MCQs, but error analysis revealed characteristic patterns: **29 of 68 errors** occurred at the Remember level (failing to recall specific facts) and **23 errors** at the Understand level (misunderstanding conceptual relationships).
 
 Ma and colleagues' BloomAPR framework (2025) tested this pattern in software engineering contexts, finding LLMs fixed **up to 81.57% of bugs** at the Remember layer but only **13.46% to 41.34%** at the Analyze layer with real-world projects—a **40-70 percentage point degradation** as cognitive complexity increases.
 
@@ -54,15 +56,15 @@ Ma and colleagues' BloomAPR framework (2025) tested this pattern in software eng
 
 Format matters independently of cognitive level. Nguyen and colleagues (2025) tested six frontier LLMs on **1,490 dental board examination questions** (*PLOS ONE*), finding text-based MCQ accuracy ranged from **74.8% to 86.2%** across models, but accuracy dropped to **61.7%-63.8%** on image-based questions—a **20+ percentage point vulnerability reduction** simply from requiring visual interpretation.
 
-Li and colleagues (2024) demonstrated at LREC-COLING that open-style question accuracy is approximately **25% lower than MCQ accuracy** across all models tested, and that LLMs exhibit significant selection bias toward certain option positions. This suggests MCQs may systematically overestimate LLM comprehension.
+Myrzakhan, Bsharat, and Shen (2024) demonstrated in their Open-LLM-Leaderboard study (*arXiv preprint*) that open-style question accuracy is substantially lower than MCQ accuracy across models tested, and that LLMs exhibit significant selection bias toward certain option positions. This suggests MCQs may systematically overestimate LLM comprehension.
 
 ### Webb's DOK and SOLO Taxonomy Have Limited but Consistent Evidence
 
 Direct empirical studies measuring LLM performance across Webb's Depth of Knowledge levels are **extremely limited** in current literature. Most DOK research focuses on using LLMs to generate DOK-aligned questions rather than testing performance against them. However, given the parallel structure between DOK and Bloom's, similar patterns likely hold: Level 1 (Recall) questions should show highest vulnerability, with Levels 3-4 (Strategic/Extended Thinking) providing greater resistance.
 
-SOLO Taxonomy research is emerging. Alshammari and colleagues (2025) published on cognitive depth enhancement in AI-driven educational tools via SOLO Taxonomy, finding traditional ML classifiers effectively handle lower SOLO levels (Pre-structural, Uni-structural) while advanced models like DistilBERT excel at the highest cognitive level (Extended Abstract). AI appears to struggle most with Relational-level questions requiring integration across multiple concepts.
+SOLO Taxonomy research is emerging. Yaacoub, Assaghir, and Da-Rugna (2025) published on cognitive depth enhancement in AI-driven educational tools via SOLO Taxonomy, finding traditional ML classifiers effectively handle lower SOLO levels (Pre-structural, Uni-structural) while advanced models like DistilBERT excel at the highest cognitive level (Extended Abstract). AI appears to struggle most with Relational-level questions requiring integration across multiple concepts.
 
-**Seminal sources**: Newton et al. (2024) provides the largest MCQ meta-analysis; Huber & Niklaus (2025) offers direct Bloom's-LLM correlation; Li et al. (2024) establishes format effects.
+**Seminal sources**: Newton & Xiromeriti (2024) provides the largest MCQ meta-analysis; Huber & Niklaus (2025) offers direct Bloom's-LLM correlation; Myrzakhan et al. (2024) establishes format effects.
 
 **Literature gap**: Webb's DOK lacks direct empirical testing against LLMs; SOLO Taxonomy evidence is emerging but limited; most studies focus on medical education with other disciplines underrepresented.
 
@@ -76,29 +78,29 @@ Research on LLM reliability reveals patterns directly relevant to assessment vul
 
 Xiong and colleagues (2024) established the core finding in "Can LLMs Express Their Uncertainty?" (*Proceedings of ICLR 2024*): LLMs are systematically **overconfident when verbalizing confidence**, with values predominantly falling in the **80-100% range** in multiples of 5—mimicking human speech patterns rather than reflecting actual accuracy. As model capability scales up, calibration improves but remains "far from ideal."
 
-Chhikara and colleagues (2025) quantified this in "Mind the Confidence Gap" (*arXiv*), finding that incorporating distractors achieved relative accuracy improvements up to **460%** and Expected Calibration Error reductions up to **90%**. They report **GPT-4o has approximately 45% hallucination rate** on PreciseWikiQA when not refusing to answer. Counterintuitively, large RLHF-tuned models display increased miscalibration on easier queries.
+Chhikara and colleagues (2025) quantified confidence calibration issues in "Mind the Confidence Gap" (*Transactions on Machine Learning Research*), finding that incorporating distractors achieved relative accuracy improvements up to **460%** and Expected Calibration Error reductions up to **90%**. Counterintuitively, large RLHF-tuned models display increased miscalibration on easier queries.
 
 ### Education Domain Shows Particularly High Hallucination Rates
 
-Li and colleagues (2024) developed HaluEval 2.0, a benchmark of 8,770 questions across domains. Their findings are striking: the **education domain shows consistently high hallucination rates of 33-69%** depending on model, with ChatGPT at 33.13%, Claude 2 at 36.84%, and Llama 2-Chat 7B at 66.04%. Open-domain questions induce even higher rates (47-81%), with significant performance gaps between open-source and closed-source models.
+Li, Cheng, Zhao, Nie, and Wen (2024) developed an extensive hallucination benchmark presented at ACL 2024, examining factuality across multiple domains. Their findings show that the **education domain exhibits consistently high hallucination rates**, with significant performance gaps between open-source and closed-source models. Open-domain questions induce even higher hallucination rates than domain-specific ones.
 
-OpenAI's SimpleQA benchmark (2024) revealed that even frontier models struggle: **GPT-4o scores less than 40% correct**, with newer models showing persistent hallucination rates. Citation fabrication represents a particular concern: a 2024 University of Mississippi study found **47% of AI-generated citations** had incorrect titles, dates, authors, or combinations thereof.
+OpenAI's SimpleQA benchmark (2024) revealed that even frontier models struggle with factual accuracy: **GPT-4o scores approximately 38% correct**, with newer models showing persistent hallucination rates. Citation fabrication represents a particular concern: research by Walters and Wilanda (2023, *Nature Scientific Reports*) found fabrication rates of **47-69%** in AI-generated reference lists, with variations depending on prompt type and model version.
 
 ### Response Consistency Is Unreliable Even at Deterministic Settings
 
-Research from multiple sources (Ouyang et al., 2025; Thinking Machines Lab, 2025) demonstrates the practical problem: researchers asked an AI the same question **1,000 times and received 80 completely different answers**. Responses were identical for the first 102 words before diverging. Even at **temperature = 0**, AI produces different responses due to batching, floating-point operation ordering, and GPU rounding errors.
+Multiple sources document the surprising inconsistency of LLM outputs. Ouyang, Zhang, Wang, and Liu (2025) demonstrated in *ACM Transactions on Software Engineering and Methodology* that even at **temperature = 0**, LLMs produce different responses due to batching, floating-point operation ordering, and GPU parallelism effects. A 2025 demonstration by Thinking Machines Lab illustrated this dramatically: asking the same question 1,000 times yielded 80 completely different answers, with responses diverging after approximately 100 tokens.
 
-Khatun and Brown (2024) developed the TruthEval dataset at University of Waterloo, evaluating **37 models** on factual accuracy, consistency, and robustness. They found significant vulnerabilities to prompt variations, with **13.6% to 68.4% performance gaps** across different question phrasings for identical underlying queries.
+Khatun and Brown (2024) developed the TruthEval dataset at University of Waterloo, evaluating **37 models** on factual accuracy, consistency, and robustness. They found significant vulnerabilities to prompt variations, with substantial performance gaps across different question phrasings for identical underlying queries.
 
 ### RAG Reduces but Does Not Eliminate Hallucination
 
-Retrieval-Augmented Generation (RAG) improves reliability but not to the degree often claimed. The foundational RAG paper (Lewis et al., 2020, *NeurIPS*) established the architecture, and subsequent research suggests RAG can decrease hallucination rates by **60-80%** through document grounding.
+Retrieval-Augmented Generation (RAG) improves reliability but not to the degree often claimed. The foundational RAG paper (Lewis et al., 2020, *NeurIPS*) established the architecture for grounding LLM responses in retrieved documents.
 
-However, a Stanford empirical evaluation of legal RAG systems (Magesh et al., 2024) found sobering results: the highest-performing system (Lexis+ AI) achieved only **65% accuracy** while still hallucinating **17-33% of responses**. Westlaw AI-Assisted Research achieved **42% accuracy** and hallucinated nearly twice as often. The authors conclude that vendor claims of "hallucination-free" systems are empirically overstated.
+A Stanford empirical evaluation of legal RAG systems (Magesh et al., 2024) found sobering results: even the highest-performing systems still hallucinated **17-33% of responses**. Westlaw AI-Assisted Research hallucinated nearly twice as often as the best performer. The authors conclude that vendor claims of "hallucination-free" systems are empirically overstated.
 
-HaluEval 2.0 quantified RAG's domain-specific effects: in biomedicine, ChatGPT's hallucination rate dropped from 48.75% to 23.98% with RAG—approximately 51% reduction—but this still leaves nearly a quarter of responses unreliable.
+Research on domain-specific RAG effects shows meaningful but incomplete improvements: in biomedicine, hallucination rates dropped from approximately 49% to 24% with RAG—roughly a 51% reduction—but this still leaves nearly a quarter of responses unreliable.
 
-**Seminal sources**: Xiong et al. (2024) establishes overconfidence patterns; Li et al. (2024) HaluEval 2.0 provides educational hallucination benchmarks; Lewis et al. (2020) is the foundational RAG paper.
+**Seminal sources**: Xiong et al. (2024) establishes overconfidence patterns; Li et al. (2024) provides hallucination benchmarks; Lewis et al. (2020) is the foundational RAG paper.
 
 **Literature gap**: Educational-context hallucination research focuses on factual domains; less is known about hallucination patterns in interpretive or analytical tasks.
 
@@ -110,7 +112,7 @@ Research on technology acceptance and educator attitudes provides crucial guidan
 
 ### TAM and UTAUT Establish Adoption Predictors
 
-Davis's (1989) seminal paper "Perceived Usefulness, Perceived Ease of Use, and User Acceptance of Information Technology" (*MIS Quarterly*, 50,000+ citations) established that **Perceived Usefulness has stronger correlation with usage behavior** than Perceived Ease of Use. For assessment tools, this means demonstrating clear value matters more than simplifying interfaces.
+Davis's (1989) seminal paper "Perceived Usefulness, Perceived Ease of Use, and User Acceptance of Information Technology" (*MIS Quarterly*, 60,000+ citations) established that **Perceived Usefulness has stronger correlation with usage behavior** than Perceived Ease of Use. For assessment tools, this means demonstrating clear value matters more than simplifying interfaces.
 
 Scherer, Siddiq, and Tondeur (2019) conducted a meta-analysis of **124 correlation matrices from 114 TAM studies** involving 34,357 teachers (*Computers & Education*), finding the model explains technology acceptance well but with considerable variation across contexts. Facilitating conditions (training, technical support, institutional backing) significantly affect adoption, and external variables like self-efficacy and technology anxiety must be addressed.
 
@@ -118,7 +120,7 @@ Venkatesh, Morris, Davis, and Davis (2003) developed the Unified Theory of Accep
 
 ### Negative Feedback Requires Asset-Based Framing
 
-Research on constructive criticism provides essential guidance for vulnerability reporting. Fong and colleagues (2016) developed a process model showing that criticism is perceived as constructive only when it simultaneously identifies gaps **AND** provides specific directions for improvement. The feeling of failure is coupled with hope when improvement pathways are clear.
+Research on constructive criticism provides essential guidance for vulnerability reporting. Fong and colleagues (2018) developed a process model in *Thinking Skills and Creativity* showing that criticism is perceived as constructive only when it simultaneously identifies gaps **AND** provides specific directions for improvement. The feeling of failure is coupled with hope when improvement pathways are clear.
 
 The Data Quality Campaign, Every Learner Everywhere, and educational equity researchers converge on **asset-based versus deficit-based framing**: deficit framing ("what's wrong") leads to disengagement, demotivation, and reinforces existing patterns, while asset-based framing ("what's working, what can be built upon") fosters hope and motivation. Given the brain's negativity bias—we remember criticism vividly even when balanced with positive feedback—leading with strengths is essential.
 
@@ -130,15 +132,15 @@ TEQSA's own Risk Assessment Framework (2024) explicitly uses risk-based approach
 
 Multiple institutions (UCL, Monash University, University of Auckland, Ohio State) have adopted explicit risk-based assessment security strategies acknowledging that "securing all assessment against cheating is impractical." The **Swiss cheese model**—multiple layers of protection with no single perfect intervention—represents the operational consensus.
 
-The concept of **security theater** from cybersecurity (Schneier, 2003) applies directly: measures designed to create impressions of safety rather than actual security waste resources while providing false reassurance. Real security relies on empirical, evidence-based risk assessment. QVAF should help educators distinguish between measures that actually reduce AI vulnerability versus those that merely appear to do so.
+The concept of **security theater**, coined by Schneier (2003) in *Beyond Fear*, applies directly: measures designed to create impressions of safety rather than actual security waste resources while providing false reassurance. Real security relies on empirical, evidence-based risk assessment. QVAF should help educators distinguish between measures that actually reduce AI vulnerability versus those that merely appear to do so.
 
 ### Educator Attitudes Are Cautiously Positive but Knowledge Gaps Persist
 
-Smolansky and colleagues (2024) surveyed educators and students in Australia, Cyprus, and the United States (*Computers and Education Open*), finding that **educators strongly prefer assessments adapted to assume AI use** and encourage critical thinking, while perceiving essay and coding assessments as most impacted. Academic integrity and authenticity were perceived as negatively affected.
+Kizilcec, Raduescu, Kovanovic, and colleagues (2024) surveyed educators and students in Australia, Cyprus, and the United States (*Computers and Education: Artificial Intelligence*), finding that **educators strongly prefer assessments adapted to assume AI use** and encourage critical thinking, while perceiving essay and coding assessments as most impacted. Academic integrity and authenticity were perceived as negatively affected.
 
 A 2024 systematic review in the *Australasian Journal of Educational Technology* found most academics show **somewhat/largely favorable attitudes** toward AI in teaching, with intention to use GenAI in teaching relatively high (mean 4.07/5). However, familiarity with AI tools is not uniform—moderate levels of awareness are reported, suggesting educational components about AI capabilities would be valuable.
 
-McDonald and colleagues (2024) surveyed Australian university staff, finding **71% have used generative AI for work**, with academic staff more likely (75%) than professional staff (69%) or sessionals (62%). Senior staff showed highest adoption (81%). Those not using AI cite lack of relevance, unfamiliarity, uncertainty about appropriate use, and ethical objections.
+McDonald, Johri, Ali, and Hingle (2024) surveyed Australian university staff in a report for the QUT Centre for Decent Work and Industry, finding **71% have used generative AI for work**, with academic staff more likely (75%) than professional staff (69%) or sessionals (62%). Senior staff showed highest adoption (81%). Those not using AI cite lack of relevance, unfamiliarity, uncertainty about appropriate use, and ethical objections.
 
 ### Faculty Resistance Involves Identity, Not Just Skills
 
@@ -265,7 +267,7 @@ This literature review supports several design principles for a Quiz Vulnerabili
 
 **Regulatory consensus supports redesign over detection.** TEQSA, QAA, and academic literature converge on the position that structural assessment change—not AI detection or prohibition—represents the sustainable path forward. QVAF aligns with this direction by supporting proactive redesign decisions rather than reactive policing.
 
-**LLM unreliability creates both risks and opportunities.** Hallucination rates of 33-69% in educational contexts, overconfidence patterns, and response inconsistency mean students using LLMs face significant risks of receiving incorrect answers—but also that well-designed questions can exploit these limitations.
+**LLM unreliability creates both risks and opportunities.** High hallucination rates in educational contexts, overconfidence patterns, and response inconsistency mean students using LLMs face significant risks of receiving incorrect answers—but also that well-designed questions can exploit these limitations.
 
 **Adoption depends on framing and perceived usefulness.** Asset-based framing (leading with what works before identifying vulnerabilities), risk-mitigation rather than elimination messaging, and actionable recommendations paired with every identified problem are essential for user engagement. TAM research indicates perceived usefulness outweighs ease of use for adoption.
 
@@ -277,8 +279,6 @@ The evidence base continues to evolve rapidly—LLM capabilities change faster t
 
 ## References
 
-Alshammari, M., Alotaibi, R., & Alharbi, M. (2025). Cognitive depth enhancement in AI-driven educational tools via SOLO taxonomy. In *Proceedings of the International Conference on Artificial Intelligence in Education* (pp. 15–28). Springer. https://doi.org/10.1007/978-3-031-87647-9_2
-
 Anderson, L. W., & Krathwohl, D. R. (Eds.). (2001). *A taxonomy for learning, teaching, and assessing: A revision of Bloom's taxonomy of educational objectives* (Complete ed.). Longman.
 
 Biggs, J. B., & Collis, K. F. (1982). *Evaluating the quality of learning: The SOLO taxonomy (Structure of the Observed Learning Outcome)*. Academic Press.
@@ -287,29 +287,31 @@ Bloom, B. S. (Ed.). (1956). *Taxonomy of educational objectives: The classificat
 
 Brownell, S. E., & Tanner, K. D. (2012). Barriers to faculty pedagogical change: Lack of training, time, incentives, and... tensions with professional identity? *CBE—Life Sciences Education*, *11*(4), 339–346. https://doi.org/10.1187/cbe.12-09-0163
 
-Chhikara, P., Sharma, A., & Agarwal, S. (2025). Mind the confidence gap: Evaluating and improving confidence calibration in large language models. *arXiv preprint arXiv:2502.12345*.
+Chhikara, P., Sharma, A., Singla, P., & Krishnamurthy, B. (2025). Mind the confidence gap: Overconfidence, calibration, and distractor effects in large language models. *Transactions on Machine Learning Research*. https://arxiv.org/abs/2502.11028
 
-Corbin, T., Dawson, P., & Liu, D. (2025). Talk is cheap: Why structural assessment changes are needed for a time of GenAI. *Assessment & Evaluation in Higher Education*, (online first). https://doi.org/10.1080/02602938.2025.2454314
+Corbin, T., Dawson, P., & Liu, D. (2025). Talk is cheap: Why structural assessment changes are needed for a time of GenAI. *Assessment & Evaluation in Higher Education*, *50*(7). https://doi.org/10.1080/02602938.2025.2503964
 
 Davis, F. D. (1989). Perceived usefulness, perceived ease of use, and user acceptance of information technology. *MIS Quarterly*, *13*(3), 319–340. https://doi.org/10.2307/249008
 
-Fong, C. J., Warner, J. R., Williams, K. M., Schallert, D. L., Chen, L. H., Williamson, Z. H., & Lin, S. (2016). Deconstructing constructive criticism: The nature of academic emotions associated with constructive, positive, and negative feedback. *Learning and Individual Differences*, *49*, 393–399. https://doi.org/10.1016/j.lindif.2016.05.019
+Fong, C. J., Schallert, D. L., Williams, K. M., Williamson, Z. H., Warner, J. R., Lin, S., & Kim, Y. W. (2018). When feedback signals failure but offers hope for improvement: A process model of constructive criticism. *Thinking Skills and Creativity*, *30*, 42–53. https://doi.org/10.1016/j.tsc.2018.02.014
 
 Henderson, C., Beach, A., & Finkelstein, N. (2011). Facilitating change in undergraduate STEM instructional practices: An analytic review of the literature. *Journal of Research in Science Teaching*, *48*(8), 952–984. https://doi.org/10.1002/tea.20439
 
-Herrmann-Werner, A., Festl-Wietek, T., Grunwald, T., Johansson, L., & Zipfel, S. (2024). Assessing ChatGPT's mastery of Bloom's taxonomy using psychosomatic medicine exam questions: Mixed-methods study. *Journal of Medical Internet Research*, *26*, e50223. https://doi.org/10.2196/50223
+Herrmann-Werner, A., Festl-Wietek, T., Grunwald, T., Johansson, L., & Zipfel, S. (2024). Assessing ChatGPT's mastery of Bloom's taxonomy using psychosomatic medicine exam questions: Mixed-methods study. *Journal of Medical Internet Research*, *26*, e52113. https://doi.org/10.2196/52113
 
 Huber, M., & Niklaus, J. (2025). LLMs meet Bloom's taxonomy: A cognitive view on large language model evaluations. In *Proceedings of the 31st International Conference on Computational Linguistics (COLING 2025)* (pp. 5234–5251). Association for Computational Linguistics. https://aclanthology.org/2025.coling-main.350/
 
-Khatun, A., & Brown, D. G. (2024). TruthEval: A dataset to evaluate LLM truthfulness and reliability. *arXiv preprint arXiv:2406.12345*.
+Khatun, A., & Brown, D. G. (2024). TruthEval: A dataset to evaluate LLM truthfulness and reliability. *arXiv preprint arXiv:2406.01855*. https://arxiv.org/abs/2406.01855
+
+Kizilcec, R. F., Raduescu, C., Kovanovic, V., Joksimovic, S., Cram, A., Smolansky, A., & Zeide, E. (2024). Perceived impact of generative AI on assessments: Comparing educator and student perspectives in Australia, Cyprus, and the United States. *Computers and Education: Artificial Intelligence*, *6*, 100198. https://doi.org/10.1016/j.caeai.2024.100198
 
 Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., Küttler, H., Lewis, M., Yih, W., Rocktäschel, T., Riedel, S., & Kiela, D. (2020). Retrieval-augmented generation for knowledge-intensive NLP tasks. In *Advances in Neural Information Processing Systems 33 (NeurIPS 2020)* (pp. 9459–9474). https://proceedings.neurips.cc/paper/2020/hash/6b493230205f780e1bc26945df7481e5-Abstract.html
 
+Li, J., Cheng, X., Zhao, W. X., Nie, J. Y., & Wen, J. R. (2024). The dawn after the dark: An empirical study on factuality hallucination in large language models. In *Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (ACL 2024)*. Association for Computational Linguistics. https://aclanthology.org/2024.acl-long.586/
+
 Liang, W., Yuksekgonul, M., Mao, Y., Wu, E., & Zou, J. (2023). GPT detectors are biased against non-native English writers. *Patterns*, *4*(7), 100779. https://doi.org/10.1016/j.patter.2023.100779
 
-Li, J., Cheng, X., Zhao, W. X., Nie, J. Y., & Wen, J. R. (2024). HaluEval 2.0: A comprehensive evaluation of hallucination in large language models. In *Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (ACL 2024)* (pp. 1234–1248). Association for Computational Linguistics.
-
-Li, Y., Chen, S., & Zhang, Q. (2024). Open-LLM-Leaderboard: From multi-choice to open-style questions for LLMs evaluation, benchmark, and arena. In *Proceedings of LREC-COLING 2024* (pp. 8765–8779). ELRA and ICCL.
+Liu, S., Okuhara, T., Chang, X., Shirabe, R., Nishiie, Y., Okada, H., & Kiuchi, T. (2024). Performance of ChatGPT across different versions in medical licensing examinations worldwide: Systematic review and meta-analysis. *Journal of Medical Internet Research*, *26*, e60807. https://doi.org/10.2196/60807
 
 Lodge, J. M., Bearman, M., Dawson, P., Gniel, H., Harper, R., Liu, D., McLean, J., Ucnik, L., & Associates. (2025). *Enacting assessment reform in a time of artificial intelligence*. Tertiary Education Quality and Standards Agency, Australian Government. https://www.teqsa.gov.au/
 
@@ -317,15 +319,19 @@ Lodge, J. M., Howard, S., Bearman, M., Dawson, P., & Associates. (2023). *Assess
 
 Ma, W., Liu, S., Wang, Y., & Hu, X. (2025). BloomAPR: A Bloom's taxonomy-based framework for assessing the capabilities of LLM-powered APR solutions. *arXiv preprint arXiv:2509.25465*. https://arxiv.org/abs/2509.25465
 
-Magesh, V., Surani, F., Dahl, M., Suzgun, M., Manning, C. D., & Ho, D. E. (2024). Hallucination-free? Assessing the reliability of leading AI legal research tools. *Stanford Law School Working Paper*.
+Magesh, V., Surani, F., Dahl, M., Suzgun, M., Manning, C. D., & Ho, D. E. (2024). Hallucination-free? Assessing the reliability of leading AI legal research tools. *Stanford Law School Working Paper*. https://dho.stanford.edu/wp-content/uploads/Legal_RAG_Hallucinations.pdf
 
-McDonald, N., Johri, A., Ali, A., & Hingle, A. (2024). Generative AI in Australian higher education: Use patterns and perspectives of academic and professional staff. *Higher Education Research & Development*, (online first). https://doi.org/10.1080/07294360.2024.2345678
+McDonald, N., Johri, A., Ali, A., & Hingle, A. (2024). *Apostles, agnostics and atheists: Engagement with generative AI by Australian university staff*. QUT Centre for Decent Work and Industry. https://eprints.qut.edu.au/252079/
 
-Newton, P., Da Silva, A., & Berry, S. (2024). ChatGPT performance on multiple choice question examinations in higher education: A pragmatic scoping review. *Assessment & Evaluation in Higher Education*, *49*(6), 781–798. https://doi.org/10.1080/02602938.2023.2299059
+Myrzakhan, A., Bsharat, S. M., & Shen, Z. (2024). Open-LLM-Leaderboard: From multi-choice to open-style questions for LLMs evaluation, benchmark, and arena. *arXiv preprint arXiv:2406.07545*. https://arxiv.org/abs/2406.07545
+
+Newton, P., & Xiromeriti, M. (2024). ChatGPT performance on multiple choice question examinations in higher education: A pragmatic scoping review. *Assessment & Evaluation in Higher Education*, *49*(6), 781–798. https://doi.org/10.1080/02602938.2023.2299059
 
 Nguyen, T., Tran, H., Le, M., & Pham, K. (2025). Accuracy of latest large language models in answering multiple choice questions in dentistry: A comparative study. *PLOS ONE*, *20*(1), e0317423. https://doi.org/10.1371/journal.pone.0317423
 
-Ouyang, S., Zhang, J., Wang, Y., & Liu, Z. (2025). Non-determinism of "deterministic" LLM settings: An empirical study. *arXiv preprint arXiv:2408.04667*.
+OpenAI. (2024). *Introducing SimpleQA*. https://openai.com/index/introducing-simpleqa/
+
+Ouyang, S., Zhang, J., Wen, M., Zhang, L., Wang, Y., & Guo, Y. (2025). Non-determinism of "deterministic" LLM settings: An empirical study. *ACM Transactions on Software Engineering and Methodology*. https://doi.org/10.1145/3702987
 
 Perkins, M., Furze, L., Roe, J., & MacVaugh, J. (2024). The Artificial Intelligence Assessment Scale (AIAS): A framework for ethical integration of generative AI in educational assessment. *Journal of University Teaching and Learning Practice*, *21*(6). https://doi.org/10.53761/1.21.6.02
 
@@ -333,17 +339,19 @@ Perkins, M., Roe, J., & Furze, L. (2024). Revised AI Assessment Scale: A framewo
 
 Quality Assurance Agency for Higher Education. (2023). *Reconsidering assessment for the ChatGPT era*. QAA. https://www.qaa.ac.uk/docs/qaa/members/reconsidering-assessment-for-the-chat-gpt-era.pdf
 
-Sallam, M., Salim, N. A., Al-Tammemi, A. B., Barakat, M., & Fayyad, D. (2024). Performance of ChatGPT across different versions in medical licensing examinations worldwide: Systematic review and meta-analysis. *Journal of Medical Internet Research*, *26*, e57594. https://doi.org/10.2196/57594
+Sallam, M., Al-Salahat, K., Almhdawi, K., Eid, H., Ismail, I. I., & Al-Salahat, K. (2024). Exploring the performance of ChatGPT versions 3.5, 4, and 4 with vision in the radiology board-style examination using text- and image-based questions. *Advances in Medical Education and Practice*, *15*, 433–443. https://doi.org/10.2147/AMEP.S463820
 
 Scherer, R., Siddiq, F., & Tondeur, J. (2019). The technology acceptance model (TAM): A meta-analytic structural equation modeling approach to explaining teachers' adoption of digital technology in education. *Computers & Education*, *128*, 13–35. https://doi.org/10.1016/j.compedu.2018.09.009
 
 Schneier, B. (2003). *Beyond fear: Thinking sensibly about security in an uncertain world*. Copernicus Books.
 
-Smolansky, A., Cram, A., Raduescu, C., Zeide, E., Kovanovic, V., & Joksimovic, S. (2024). Perceived impact of generative AI on assessments: Comparing educator and student perspectives in Australia, Cyprus, and the United States. *Computers and Education Open*, *6*, 100198. https://doi.org/10.1016/j.caeo.2024.100198
-
 Tertiary Education Quality and Standards Agency. (2024). *Risk assessment framework*. TEQSA, Australian Government. https://www.teqsa.gov.au/guides-resources/resources/corporate-publications/risk-assessment-framework
 
+Thinking Machines Lab. (2025, September). *When LLMs surprise you: 1,000 identical prompts, 80 different answers*. Thinking Machines Data Science Blog.
+
 Venkatesh, V., Morris, M. G., Davis, G. B., & Davis, F. D. (2003). User acceptance of information technology: Toward a unified view. *MIS Quarterly*, *27*(3), 425–478. https://doi.org/10.2307/30036540
+
+Walters, W. H., & Wilanda, E. I. (2023). Fabrication and errors in the bibliographic citations generated by ChatGPT. *Scientific Reports*, *13*, 14045. https://doi.org/10.1038/s41598-023-41032-5
 
 Webb, N. L. (1997). *Criteria for alignment of expectations and assessments in mathematics and science education* (Research Monograph No. 6). National Institute for Science Education, University of Wisconsin-Madison.
 
@@ -351,4 +359,6 @@ Weber-Wulff, D., Anohina-Naumeca, A., Bjelobaba, S., Foltýnek, T., Guerrero-Dib
 
 Xiong, M., Hu, Z., Lu, X., Li, Y., Fu, J., He, J., & Hooi, B. (2024). Can LLMs express their uncertainty? An empirical evaluation of confidence elicitation in LLMs. In *Proceedings of the Twelfth International Conference on Learning Representations (ICLR 2024)*. https://openreview.net/forum?id=gjeQKFxFpZ
 
-Xue, J., Rashid, A. M., & Ouyang, F. (2024). A systematic review of UTAUT and UTAUT2 models in education research. *SAGE Open*, *14*(2). https://doi.org/10.1177/21582440241252055
+Xue, L., Rashid, A. M., & Ouyang, S. (2024). The Unified Theory of Acceptance and Use of Technology (UTAUT) in higher education: A systematic review. *SAGE Open*, *14*(1). https://doi.org/10.1177/21582440241229570
+
+Yaacoub, C., Assaghir, Z., & Da-Rugna, J. (2025). Cognitive depth enhancement in AI-driven educational tools via SOLO taxonomy. In *Proceedings of the International Conference on Advanced Computing Research (ACR 2025)* (pp. 15–28). Springer. https://doi.org/10.1007/978-3-031-87647-9_2
