@@ -2,7 +2,7 @@
 
 ## Introduction
 ---
-Regulatory reports and scholarly research relevant to the design of assessment tools provide guidance towards evaluating vulnerability of online quizzes to misuse of AI in educational settings. The review addresses five domains: regulatory frameworks for assessment design in AI contexts, empirical patterns in large language model (LLM) performance by question type and cognitive level, research on LLM reliability and hallucination, and design rationale for the Quiz Vulnerability Assessment Framework (QVAF). The synthesis lends support to the utility of assessing and addressing online quiz vulnerability as a complementary activity to structural assessment redesign. Collectively these actions are a more sustainable approach than AI detection or prohibition.
+Unproctored online quizzes and tests face validity threats from student cheating behaviour and integrity concerns have been compounded by the availability of generative AI tools. Regulatory reports and scholarly research relevant to the design of assessment tools provide guidance towards evaluating vulnerability of online quizzes to misuse of AI in educational settings. The review addresses five domains: regulatory frameworks for assessment design in AI contexts, empirical patterns in large language model (LLM) performance by question type and cognitive level, research on LLM reliability and hallucination, and design rationale for the Quiz Vulnerability Assessment Framework (QVAF). The synthesis lends support to the utility of assessing and addressing online quiz vulnerability as a complementary activity to structural assessment redesign. Collectively these actions are a more sustainable approach than AI detection or prohibition. In essence, AI-powered tools—including LLM-based item quality evaluation can prove valuable to educators seeking to maintain or restore assessment validity. This document is a work in progress and should not be cited.
 
 ---
 ## 1. Regulatory Frameworks for Assessment Redesign
@@ -37,9 +37,9 @@ Yet, research on domain-specific RAG effects indicates reductions in hallucinati
 ---
 Research on technology acceptance and educator attitudes provides guidance for designing assessment tools that educators will adopt. In terms of technology adoption, and a possible commentary on the adoption of the QVAF, we rely on existing theories on technology adoption. Primarily, we rely on Davis (1989), who established the Technology Acceptance Model (TAM), finding that Perceived Usefulness had stronger correlation with usage behaviour than Perceived Ease of Use. Scherer et al. (2019) found that the model explained technology acceptance with variation across contexts, and that facilitating conditions (training, technical support, institutional backing) affected adoption.
 
-### 4.1 Risk-Based Approaches
+### 4.1 Risk-Based Approaches and Assessment Validity
 
-TEQSA (2024) published a Risk Assessment Framework stating that "TEQSA recognises that innovation often involves a degree of risk taking and does not consider risk as necessarily negative or that all risk must be controlled or eliminated."
+TEQSA (2024) published a Risk Assessment Framework stating that "TEQSA recognises that innovation often involves a degree of risk taking and does not consider risk as necessarily negative or that all risk must be controlled or eliminated." The academic integrity threat can also be framed in terms of assessment validity. Messick (1989) defined assessment validity as an integrated evaluative judgment of the degree to which empirical evidence and theoretical rationales support the adequacy and appropriateness of inferences and actions based on test scores. Cheating presents barriers to the certification of student learning objective attainment, and a threat to the validity of the assessment (Dawson et al., 2024). Assessment validity threats are not new, research conducted prior to 2023 documented validity threats in unproctored online assessments arising from unauthorised resource use, collaboration, and identity fraud. However, such threats have increased in scale in the age of genAI (Newton, 2025), 
 
 Schneier (2003) introduced the concept of security theatre, referring to measures designed to create impressions of safety rather than actual security. To this end, the QVAF has been designed to provide constructive feedback, framed from the premise that objective measures of vulnerability provide an assessment of risk, but do not prescribe redesigns of individual questions. This notion echoes Fong et al. (2018) model of constructive criticism, where criticism is perceived as constructive when it identifies gaps and provides directions for improvement. Further support for this approach exists in research on asset-based versus deficit-based framing indicates that deficit framing leads to disengagement, while asset-based framing supports motivation.
 
@@ -166,6 +166,8 @@ Corbin, T., Dawson, P., & Liu, D. (2025). Talk is cheap: Why structural assessme
 
 Davis, F. D. (1989). Perceived usefulness, perceived ease of use, and user acceptance of information technology. *MIS Quarterly*, *13*(3), 319–340. https://doi.org/10.2307/249008
 
+Dawson, P., Bearman, M., Dollinger, M., & Boud, D. (2024). Validity matters more than cheating. Assessment; Evaluation in Higher Education, 49(7), 1005–1016. https://doi.org/10.1080/02602938.2024.2386662
+
 Fong, C. J., Schallert, D. L., Williams, K. M., Williamson, Z. H., Warner, J. R., Lin, S., & Kim, Y. W. (2018). When feedback signals failure but offers hope for improvement: A process model of constructive criticism. *Thinking Skills and Creativity*, *30*, 42–53. https://doi.org/10.1016/j.tsc.2018.02.014
 
 Henderson, C., Beach, A., & Finkelstein, N. (2011). Facilitating change in undergraduate STEM instructional practices: An analytic review of the literature. *Journal of Research in Science Teaching*, *48*(8), 952–984. https://doi.org/10.1002/tea.20439
@@ -184,9 +186,13 @@ Lodge, J. M., Howard, S., Bearman, M., Dawson, P., & Associates. (2023). *Assess
 
 Magesh, V., Surani, F., Dahl, M., Suzgun, M., Manning, C. D., & Ho, D. E. (2024). Hallucination-free? Assessing the reliability of leading AI legal research tools. *Stanford Law School Working Paper*. https://dho.stanford.edu/wp-content/uploads/Legal_RAG_Hallucinations.pdf
 
+Messick, S. (1989). Validity. In R. L. Linn (Ed.), Educational measurement (3rd ed., pp. 13–103). American Council on Education and Macmillan.
+
 Myrzakhan, A., Bsharat, S. M., & Shen, Z. (2024). Open-LLM-Leaderboard: From multi-choice to open-style questions for LLMs evaluation, benchmark, and arena. *arXiv preprint arXiv:2406.07545*. https://arxiv.org/abs/2406.07545
 
 Newton, P., & Xiromeriti, M. (2024). ChatGPT performance on multiple choice question examinations in higher education: A pragmatic scoping review. *Assessment & Evaluation in Higher Education*, *49*(6), 781–798. https://doi.org/10.1080/02602938.2023.2299059
+
+Newton, P. M. (2025). How vulnerable are UK universities to cheating with new GenAI tools? A pragmatic risk assessment. Assessment; Evaluation in Higher Education, 50(8), 1332–1343. https://doi.org/10.1080/02602938.2025.2511794
 
 Nguyen, T., Tran, H., Le, M., & Pham, K. (2025). Accuracy of latest large language models in answering multiple choice questions in dentistry: A comparative study. *PLOS ONE*, *20*(1), e0317423. https://doi.org/10.1371/journal.pone.0317423
 
