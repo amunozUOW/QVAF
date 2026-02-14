@@ -8,7 +8,7 @@ This document captures implementation plans and priorities for the Quiz Vulnerab
 
 | Order | What | Effort | Payoff | Status |
 |-------|------|--------|--------|--------|
-| 1 | Split App.py into modules | 1 session | Makes everything else easier + better vibe coding | NOT STARTED |
+| 1 | Split App.py into modules | 1 session | Makes everything else easier + better vibe coding | DONE (App.py 286 lines → 8 modules) |
 | 2 | Extract parsing into shared utils | 1 session | Required for both testing and standalone mode | DONE |
 | 3 | Automated tests (Priority 1-2) | 1 session | Protects existing code before we add features | DONE (127 tests) |
 | 4 | Standalone manual entry mode | 2-3 sessions | Biggest adoption unlock | NOT STARTED |
