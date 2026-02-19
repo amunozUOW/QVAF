@@ -86,10 +86,15 @@ match, select, locate, enumerate
 
 Critical test: If the question can be answered by retrieving a SINGLE fact,
 name, date, definition, or category label from memory — with no scenario
-interpretation required — it is RECALL.
+interpretation required — it is RECALL. Focus on the QUESTION STEM, not
+the answer options. Complex or plausible distractors among the options do
+NOT increase the cognitive demand of the question itself. A question that
+asks "What is [term]?" or "Which of the following defines [concept]?" is
+RECALL even if the options include nuanced or overlapping definitions.
 
 Examples:
   "What is the definition of [term]?"
+  "What is [concept]?" (selecting the correct definition from options)
   "In what year did [event] occur?"
   "What does [acronym] stand for?"
   "Which [item] has the highest [property]?" (when answerable from a
@@ -120,6 +125,11 @@ interpret (simple data), sort
 Boundary — what makes it Level 2, not Level 1:
   The question presents a scenario or context that must be interpreted and
   matched to a concept. Level 1 asks about the concept directly.
+  IMPORTANT: If the question stem asks "What is [term]?" or "Define [term]"
+  or "Which of the following is [concept]?", it is asking about the concept
+  directly and is therefore Level 1 (RECALL), regardless of how complex or
+  nuanced the answer options are. Level 2 requires a described SITUATION
+  that the student must interpret — not simply choosing a definition.
 
 Boundary — what makes it Level 2, not Level 3:
   The student does NOT need to explain WHY the concept works or how
