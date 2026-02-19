@@ -418,10 +418,73 @@ def get_confidence_flag(correct_without, conf_without, correct_with, conf_with):
 # QUESTION TYPE CLASSIFICATION (via LLM)
 # ============================================
 
+# Rule-based patterns that are definitionally RECALL regardless of options.
+# These catch question stems where the LLM consistently over-classifies
+# due to option complexity (a known limitation of small models).
+# Patterns are applied to the question stem ONLY, before the LLM is called.
+RECALL_STEM_PATTERNS = [
+    # "What is [term]?" / "What is [term] in [context]?"
+    r'^what\s+(?:is|are)\s+\w+.*\??\s*$',
+    # "Define [term]" / "Define the term [term]"
+    r'^define\s+',
+    # "Which of the following (?:best )?defines [term]?"
+    r'which\s+of\s+the\s+following\s+(?:best\s+)?(?:defines?|is the definition of)',
+    # "What does [term] mean?"
+    r'^what\s+does\s+\w+.*\s+mean',
+    # "What does [acronym] stand for?"
+    r'^what\s+does\s+\w+\s+stand\s+for',
+    # "[Term] is defined as:" / "[Term] refers to:" / "[Concept] means:"
+    # Only matches short stems (up to ~15 words) to avoid catching complex questions
+    r'^(?:\w+\s+){0,14}\w+\s+(?:is defined as|refers to|means)\s*[:?]?\s*$',
+    # "The definition of [term] is:"
+    r'^the\s+definition\s+of\s+',
+]
+
+
+def _is_recall_by_stem(question_text):
+    """
+    Rule-based pre-classifier: check if the question stem is a direct
+    definition/identification question that is definitionally RECALL.
+
+    Returns True if the stem matches a known RECALL pattern, False otherwise.
+    When True, the LLM classifier is bypassed for the category (but still
+    called for rationale generation).
+
+    This exists because small LLMs (8B parameters) consistently over-classify
+    "What is [term]?" questions as Routine Application when complex answer
+    options are present, despite explicit instructions to focus on the stem.
+    """
+    stem = question_text.strip().lower()
+    # Remove leading question numbers like "Question 1:" or "Q1."
+    stem = re.sub(r'^(?:question\s+\d+\s*[:.]?\s*|q\d+\s*[:.]?\s*)', '', stem)
+    for pattern in RECALL_STEM_PATTERNS:
+        if re.search(pattern, stem, re.IGNORECASE):
+            return True
+    return False
+
+
 def classify_question_type(question_text, options=None):
-    """Use LLM to classify question into cognitive demand category"""
+    """
+    Classify question into cognitive demand category.
+
+    Uses a two-stage approach:
+    1. Rule-based pre-classifier catches obvious RECALL stems (e.g.,
+       "What is [term]?") that small LLMs consistently misclassify.
+    2. LLM-based classifier handles all other questions using the full
+       cognitive demand taxonomy.
+    """
     global ANALYSIS_MODEL
 
+    # Stage 1: Rule-based pre-classification for known RECALL patterns
+    if _is_recall_by_stem(question_text):
+        return (
+            f"CATEGORY: RECALL\n"
+            f"RATIONALE: The question stem asks for the definition or identification "
+            f"of a term, which requires direct retrieval from memory.\n"
+            f"KEY COGNITIVE DEMAND: Recognising or reproducing a memorised definition"
+        )
+
+    # Stage 2: LLM-based classification for everything else
     options_text = ""
     if options:
         options_text = "\n\nOPTIONS:\n" + "\n".join([f"{k}. {v}" for k, v in options.items()])
