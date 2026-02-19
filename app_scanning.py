@@ -229,6 +229,62 @@ def run_quiz(use_rag=False, status_container=None):
         raise Exception("Scan failed - no output file")
 
 
+def _find_quiz_results_page(browser):
+    """Find the specific page showing quiz results (with div.que elements).
+
+    When multiple tabs are open, find_moodle_page() may return the wrong one
+    (e.g., a course page instead of the results review page). This function
+    checks all candidate pages for actual quiz result content.
+    """
+    all_pages = []
+
+    for context in browser.contexts:
+        for page in context.pages:
+            try:
+                url = page.url
+                title = page.title() if url else ""
+            except:
+                url = "unknown"
+                title = ""
+            all_pages.append({'page': page, 'url': url, 'title': title})
+
+    # Filter out internal Chrome pages
+    candidate_pages = []
+    for p in all_pages:
+        url_lower = p['url'].lower()
+        if any(excl in url_lower for excl in EXCLUDE_URL_PATTERNS):
+            continue
+        candidate_pages.append(p)
+
+    # First pass: look for a page with quiz result elements (div.que with correct/incorrect)
+    for p in candidate_pages:
+        try:
+            questions = p['page'].query_selector_all('div.que')
+            if questions and len(questions) > 0:
+                # Verify at least one question has a correctness indicator
+                for q in questions:
+                    classes = q.get_attribute('class') or ''
+                    if 'correct' in classes or 'incorrect' in classes:
+                        log(f"Found quiz results page: {p['url'][:80]}")
+                        return p['page'], p['url']
+        except:
+            continue
+
+    # Second pass: look for any page with div.que elements (results not yet graded)
+    for p in candidate_pages:
+        try:
+            questions = p['page'].query_selector_all('div.que')
+            if questions and len(questions) > 0:
+                log(f"Found quiz page with questions: {p['url'][:80]}")
+                return p['page'], p['url']
+        except:
+            continue
+
+    # Fallback to the general Moodle page finder
+    log("No quiz results page found, falling back to general page finder")
+    return find_moodle_page(browser)
+
+
 def scrape_results():
     """Get results from submitted quiz"""
     from playwright.sync_api import sync_playwright
@@ -238,7 +294,7 @@ def scrape_results():
 
     with sync_playwright() as p:
         browser = p.chromium.connect_over_cdp("http://localhost:9222")
-        page, _ = find_moodle_page(browser)
+        page, url = _find_quiz_results_page(browser)
 
         for q in page.query_selector_all('div.que'):
             try:
@@ -269,7 +325,10 @@ def scrape_results():
     total = len([r for r in results if r.get('is_correct') is not None])
     pct = round(correct/total*100) if total else 0
 
-    log(f"Score: {correct}/{total} ({pct}%)")
+    if total == 0:
+        log("Warning: No scored questions found. Make sure you're on the quiz results review page.")
+    else:
+        log(f"Score: {correct}/{total} ({pct}%)")
     return results
 
 
