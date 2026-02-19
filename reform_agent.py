@@ -60,70 +60,233 @@ question_type_system = """
 COGNITIVE DEMAND CLASSIFICATION SYSTEM
 
 Classify the question into ONE of these categories based on what type of
-thinking is PRIMARILY required. Choose the LOWEST category that fully describes
-the cognitive demand — do NOT over-classify.
+thinking is PRIMARILY required. Choose the LOWEST category that fully
+describes the cognitive demand — do NOT over-classify.
 
+This taxonomy synthesises Bloom's Revised Taxonomy (Anderson & Krathwohl,
+2001), Webb's Depth of Knowledge (Webb, 1997), and SOLO Taxonomy (Biggs &
+Collis, 1982).
+
+==========================================================================
 1. RECALL
-   - Direct retrieval of memorised facts, definitions, or procedures
-   - Recognition of previously learned information
-   - Identifying which term, name, or category something belongs to
-   - No transformation of knowledge required
-   - Examples: "Define X", "What is the name of Y", "List the components of Z",
-     "Which stage of the product life cycle has the highest growth?"
+==========================================================================
+Definition: Direct retrieval of memorised facts, definitions, terms, or
+previously learned information from long-term memory. The response requires
+recognition or reproduction of known content with no transformation,
+interpretation, or application of the knowledge. The student need only
+access a single, discrete piece of information.
 
+Taxonomy alignment:
+  Bloom's: Remember (recognise, recall) on Factual Knowledge
+  Webb's DOK: Level 1 — Recall & Reproduction
+  SOLO: Unistructural
+
+Key verbs: define, identify, list, name, state, label, recognise, recall,
+match, select, locate, enumerate
+
+Critical test: If the question can be answered by retrieving a SINGLE fact,
+name, date, definition, or category label from memory — with no scenario
+interpretation required — it is RECALL.
+
+Examples:
+  "What is the definition of [term]?"
+  "In what year did [event] occur?"
+  "What does [acronym] stand for?"
+  "Which [item] has the highest [property]?" (when answerable from a
+   single memorised fact)
+  "Name the [components/stages/parts] of [concept]."
+
+==========================================================================
 2. ROUTINE APPLICATION
-   - Applying a known procedure or definition to a specific scenario
-   - Matching a described situation to the correct category or concept
-   - Following established steps to reach a solution
-   - Minimal judgment required about which approach to use
-   - Examples: "Calculate X using formula Y", "This scenario describes which type of...",
-     "Classify this example as..."
+==========================================================================
+Definition: Applying a known procedure, definition, or classification
+scheme to a specific scenario or instance. The student must recognise
+which established concept, category, or formula applies to a described
+situation and carry out the matching or computation. The procedure is
+standard and well-rehearsed; the primary cognitive demand is selecting and
+executing the correct known approach, not judging between approaches or
+reasoning about why.
 
+Taxonomy alignment:
+  Bloom's: Understand (classify, exemplify) / Apply (execute, implement)
+           on Factual and Procedural Knowledge
+  Webb's DOK: Level 2 — Skills & Concepts
+  SOLO: Multistructural
+
+Key verbs: apply, calculate, classify, categorise, compute, demonstrate,
+determine, execute, implement, solve (using known method), use, organise,
+interpret (simple data), sort
+
+Boundary — what makes it Level 2, not Level 1:
+  The question presents a scenario or context that must be interpreted and
+  matched to a concept. Level 1 asks about the concept directly.
+
+Boundary — what makes it Level 2, not Level 3:
+  The student does NOT need to explain WHY the concept works or how
+  concepts relate. The question asks WHAT (category/label/result), not
+  WHY or HOW concepts interrelate.
+
+Critical test: If the student can answer correctly by (a) recognising a
+pattern they have seen before and (b) applying a known formula or
+classification, without needing to explain underlying reasoning or compare
+alternatives, it is ROUTINE APPLICATION.
+
+Examples:
+  "This scenario describes which type of [category]?"
+  "Calculate [X] using [formula/method]."
+  "Given these symptoms, which condition is this consistent with?"
+  "What will this code snippet output?" (tracing a known procedure)
+  "Classify this example as [category A] or [category B]."
+
+==========================================================================
 3. CONCEPTUAL UNDERSTANDING
-   - Demonstrating understanding of relationships between concepts
-   - Explaining mechanisms, causes, or effects
-   - Comparing or contrasting related ideas
-   - Requires understanding WHY, not just WHAT
-   - Examples: "Explain why X causes Y", "How does A relate to B",
-     "What distinguishes concept X from concept Y?"
+==========================================================================
+Definition: Demonstrating understanding of the relationships, mechanisms,
+and principles that connect concepts. The student must explain WHY
+something works, HOW concepts relate to each other, or WHAT distinguishes
+related ideas. This requires going beyond applying labels or procedures to
+articulating the underlying logic, comparing and contrasting related ideas,
+or explaining cause-and-effect relationships. The student constructs
+meaning rather than merely recognising patterns.
 
+Taxonomy alignment:
+  Bloom's: Understand (compare, explain, infer) / Analyse (differentiate)
+           on Conceptual Knowledge
+  Webb's DOK: Level 2-3 boundary
+  SOLO: Relational
+
+Key verbs: explain, compare, contrast, distinguish, differentiate, relate,
+describe (how/why), infer, interpret (relationships), summarise, connect,
+predict (based on principles), generalise
+
+Boundary — what makes it Level 3, not Level 2:
+  The question asks WHY or HOW, not just WHAT category. The student must
+  explain a mechanism, relationship, or principle — not just apply one.
+  Understanding could not be demonstrated by executing a procedure alone.
+
+Boundary — what makes it Level 3, not Level 4:
+  The concepts being related are ESTABLISHED and taught. There is generally
+  one defensible answer based on established theory. The student is not
+  evaluating competing evidence or weighing trade-offs.
+
+Critical test: If the question can be answered by someone who genuinely
+understands the concept but has never seen this specific scenario, AND it
+CANNOT be answered by someone who merely memorised definitions without
+understanding relationships, it is CONCEPTUAL UNDERSTANDING.
+
+Examples:
+  "Explain why [X] causes [Y]."
+  "What distinguishes [concept A] from [concept B]?"
+  "How does an increase in [variable] affect [outcome] and why?"
+  "Compare and contrast [idea A] and [idea B]."
+  "Why does [phenomenon] occur?"
+
+==========================================================================
 4. ANALYTICAL REASONING
-   - Breaking down complex, multi-part information to draw conclusions
-   - Evaluating competing evidence or arguments
-   - Making judgments based on multiple criteria simultaneously
-   - Requires NOVEL analysis, not just applying known categories
-   - Examples: "Given this data set, determine...", "Evaluate which strategy is
-     most effective considering factors A, B, and C"
+==========================================================================
+Definition: Breaking down complex, multi-faceted information to draw
+conclusions by evaluating competing evidence, weighing trade-offs, or
+making judgments based on multiple criteria simultaneously. The student
+must go beyond understanding established relationships to performing
+novel analysis — integrating data from multiple sources, evaluating
+arguments, or making justified decisions where multiple considerations
+must be balanced. Stating reasoning and providing supporting evidence
+are essential.
 
+Taxonomy alignment:
+  Bloom's: Analyse (differentiate, organise, attribute) / Evaluate
+           (check, critique, judge) on Conceptual and Procedural Knowledge
+  Webb's DOK: Level 3 — Strategic Thinking
+  SOLO: Relational to Extended Abstract transition
+
+Key verbs: analyse, evaluate, assess, critique, judge, justify, determine
+(given evidence), prioritise, investigate, deduce, conclude (from data),
+appraise, defend, argue
+
+Boundary — what makes it Level 4, not Level 3:
+  The question presents NOVEL data or a scenario not directly covered in
+  the curriculum. Multiple factors must be weighed simultaneously. The
+  student must EVALUATE, not just explain. There may be more than one
+  defensible answer.
+
+Boundary — what makes it Level 4, not Level 5:
+  The analysis operates within a SINGLE domain or problem space. The
+  student analyses given information rather than creating something new.
+
+Critical test: If the question provides data or evidence and asks the
+student to reach a conclusion that requires weighing multiple factors and
+CANNOT be answered by applying a single known principle, it is ANALYTICAL
+REASONING.
+
+Examples:
+  "Given this data, determine which [option] is most effective and why."
+  "Evaluate the trade-offs between [approach A] and [approach B]."
+  "What conclusions can you draw from [this evidence]?"
+  "Critique the following argument: [argument]."
+  "A study reports [finding] but has [limitation]. Assess its validity."
+
+==========================================================================
 5. STRATEGIC INTEGRATION
-   - Synthesizing information from multiple sources into a new solution
-   - Applying knowledge to genuinely novel, non-routine situations
-   - Creating or designing something that requires integrating multiple concepts
-   - Examples: "Design a solution for...", "How would you address this entirely new scenario..."
+==========================================================================
+Definition: Synthesising knowledge from multiple domains, frameworks, or
+sources to create, design, or propose a novel solution to a complex,
+non-routine problem. The student must integrate conceptual understanding
+across different areas, apply knowledge to genuinely new situations that
+have no single correct procedure, and produce something that requires
+planning, development, and original thought.
 
-CLASSIFICATION RULES:
-- If a question asks you to IDENTIFY or NAME something from a known list → RECALL
-- If a question asks you to MATCH a scenario to a known category → ROUTINE APPLICATION
-- If a question asks you to EXPLAIN WHY or COMPARE concepts → CONCEPTUAL UNDERSTANDING
-- Only use ANALYTICAL REASONING if the question requires evaluating novel evidence or data
-- Only use STRATEGIC INTEGRATION if the question requires creating/designing something new
+Taxonomy alignment:
+  Bloom's: Create (generate, plan, produce) / Evaluate at highest level
+           on Conceptual, Procedural, and Metacognitive Knowledge
+  Webb's DOK: Level 4 — Extended Thinking
+  SOLO: Extended Abstract
 
-WORKED EXAMPLES:
+Key verbs: design, create, synthesise, propose, develop, formulate,
+construct, integrate, plan, devise, generate, hypothesise, compose
 
-Q: "Which of the four product life cycle stages experiences the highest increase in sales rate?"
-→ CATEGORY: RECALL (Identifying a characteristic of a named stage from textbook knowledge)
+Boundary — what makes it Level 5, not Level 4:
+  The task requires synthesis ACROSS multiple domains or frameworks. The
+  student must CREATE or DESIGN something new, not just evaluate given
+  options. The problem is genuinely novel and non-routine. Note: this
+  level is very difficult to assess in multiple-choice format.
 
-Q: "Additional finished ice cream held on site, not allocated to a customer, represents which type of waste?"
-→ CATEGORY: ROUTINE APPLICATION (Matching a described scenario to a Lean waste category)
+Critical test: If the question cannot be answered by mastering any single
+concept or framework, and instead requires pulling together ideas from
+multiple areas to produce something that did not previously exist, it is
+STRATEGIC INTEGRATION.
 
-Q: "Which of the following are classifiable as transforming resources?"
-→ CATEGORY: CONCEPTUAL UNDERSTANDING (Requires understanding the distinction between transforming and transformed resources, then applying it)
+Examples:
+  "Design a [system/strategy/plan] that addresses [multiple constraints
+   from different domains]."
+  "Propose a comprehensive approach integrating [framework A] and
+   [framework B] to solve [novel problem]."
+  "Develop a [plan] for [situation] considering [competing requirements
+   across disciplines]."
 
-Q: "Given sales data for Q1-Q4, which product line should the company discontinue and why?"
-→ CATEGORY: ANALYTICAL REASONING (Requires evaluating multiple data points to draw a conclusion)
+==========================================================================
+BOUNDARY DECISION FLOWCHART — apply these sequential tests:
+==========================================================================
 
-Q: "Design a supply chain strategy for a new product entering a market with these constraints..."
-→ CATEGORY: STRATEGIC INTEGRATION (Requires synthesizing multiple concepts into a novel solution)
+1. Can it be answered by retrieving a single fact or definition?
+   -> YES = RECALL
+
+2. Does it require matching a scenario to a known category, or executing
+   a known procedure?
+   -> YES = ROUTINE APPLICATION
+
+3. Does it require explaining WHY or HOW concepts relate, or comparing
+   and contrasting ideas?
+   -> YES = CONCEPTUAL UNDERSTANDING
+
+4. Does it require evaluating novel evidence, weighing trade-offs, or
+   making a justified judgment across multiple criteria?
+   -> YES = ANALYTICAL REASONING
+
+5. Does it require synthesising across multiple domains or frameworks to
+   create something new?
+   -> YES = STRATEGIC INTEGRATION
+
+Always apply the LOWEST level that fully describes the cognitive demand.
 """
 
 
