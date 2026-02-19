@@ -240,6 +240,8 @@ The RAG (Retrieval-Augmented Generation) feature lets you test whether AI perfor
 
 ### Cognitive Demand Levels
 
+QVAF classifies each question using a five-level cognitive demand taxonomy that synthesises Bloom's Revised Taxonomy (Anderson & Krathwohl, 2001), Webb's Depth of Knowledge (Webb, 1997), and the SOLO Taxonomy (Biggs & Collis, 1982). Classification is performed automatically by the LLM using formal definitions, boundary criteria that distinguish adjacent levels, and a sequential decision flowchart. The classifier applies the lowest level that fully describes the cognitive demand to guard against over-classification. These classifications are suggestions for your validation — you know your questions and learning outcomes better than any automated system. See the [literature review](QVAF_Literature_Review.md#52-cognitive-demand-taxonomy) for full definitions, taxonomy mappings, and references.
+
 | Level | Name | AI Vulnerability | Example |
 |-------|------|-----------------|---------|
 | 1 | **Recall** | Usually high | "Define supply chain management" |

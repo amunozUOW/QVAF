@@ -66,13 +66,15 @@ QVAF addresses a specific behaviour: students copying quiz questions into an AI 
 
 QVAF employs a five-level cognitive demand taxonomy synthesising Bloom's Revised Taxonomy (Bloom, 1956, Anderson & Krathwohl, 2001), Webb's Depth of Knowledge (Webb, 1997), and SOLO Taxonomy (Biggs & Collis, 1982):
 
-| Level | Name | Description |
-|-------|------|-------------|
-| 1 | Recall | Direct retrieval of memorised facts, definitions, or procedures |
-| 2 | Routine Application | Applying known procedures where method selection is apparent |
-| 3 | Conceptual Understanding | Demonstrating understanding of relationships between concepts |
-| 4 | Analytical Reasoning | Breaking down information; evaluating evidence |
-| 5 | Strategic Integration | Synthesising multiple sources; applying to novel situations |
+| Level | Name | Bloom's Revised (Anderson & Krathwohl, 2001) | Webb's DOK (Webb, 1997) | SOLO (Biggs & Collis, 1982) | Description |
+|-------|------|----------------------------------------------|------------------------|-----------------------------|-------------|
+| 1 | Recall | Remember | DOK 1: Recall & Reproduction | Unistructural | Direct retrieval of memorised facts, definitions, or procedures |
+| 2 | Routine Application | Understand / Apply | DOK 2: Skills & Concepts | Multistructural | Applying known procedures where method selection is apparent |
+| 3 | Conceptual Understanding | Understand (higher) / Analyse (lower) | DOK 2–3 boundary | Relational | Demonstrating understanding of relationships between concepts |
+| 4 | Analytical Reasoning | Analyse / Evaluate | DOK 3: Strategic Thinking | Relational to Extended Abstract | Breaking down information; evaluating evidence |
+| 5 | Strategic Integration | Evaluate / Create | DOK 4: Extended Thinking | Extended Abstract | Synthesising multiple sources; applying to novel situations |
+
+QVAF classifies each quiz question into one of these five levels using an automated LLM-based classification step. The classification prompt provides the LLM with formal definitions for each level, explicit boundary criteria distinguishing adjacent levels, key cognitive verbs drawn from Anderson and Krathwohl's (2001) revised verb lists, and a sequential decision flowchart that instructs the classifier to apply the lowest level that fully describes the cognitive demand. This "classify at the lowest appropriate level" principle guards against over-classification, a tendency observed in early testing where the LLM would assign higher cognitive demand labels to questions that were, on inspection, straightforward recall or routine application tasks. Boundary criteria are expressed as contrastive pairs (e.g., "Level 2 asks WHAT category; Level 3 asks WHY or HOW concepts relate") rather than as standalone descriptions, following Hess et al.'s (2009) approach of using a cognitive rigor matrix to disambiguate cases where Bloom's level and Webb's depth of knowledge diverge. The Hess Cognitive Rigor Matrix superimposes Bloom's six cognitive process levels with Webb's four DOK levels, producing a two-dimensional grid that captures both the type and depth of thinking required (Hess et al., 2009). This matrix informed the boundary criteria used in the QVAF taxonomy, particularly for distinguishing Routine Application from Conceptual Understanding and Analytical Reasoning from Strategic Integration. The automated classification is presented as a suggestion for educator validation, consistent with the decision-support philosophy outlined in Section 5.5. All LLM classification calls use a temperature setting of zero to minimise stochastic variation across repeated assessments, though some residual non-determinism remains due to the factors documented in Section 3 (Ouyang et al., 2025).
 
 ### 5.3 Testing Methodology
 
@@ -171,6 +173,8 @@ Dawson, P., Bearman, M., Dollinger, M., & Boud, D. (2024). Validity matters more
 Fong, C. J., Schallert, D. L., Williams, K. M., Williamson, Z. H., Warner, J. R., Lin, S., & Kim, Y. W. (2018). When feedback signals failure but offers hope for improvement: A process model of constructive criticism. *Thinking Skills and Creativity*, *30*, 42–53. https://doi.org/10.1016/j.tsc.2018.02.014
 
 Henderson, C., Beach, A., & Finkelstein, N. (2011). Facilitating change in undergraduate STEM instructional practices: An analytic review of the literature. *Journal of Research in Science Teaching*, *48*(8), 952–984. https://doi.org/10.1002/tea.20439
+
+Hess, K. K., Carlock, D., Jones, B., & Walkup, J. R. (2009). What exactly do "fewer, clearer, and higher standards" really look like in the classroom? Using a cognitive rigor matrix to analyze curriculum, plan lessons, and implement assessments. In *Proceedings of the Council of Chief State School Officers (CCSSO)*. https://eric.ed.gov/?id=ED543820
 
 Huber, M., & Niklaus, J. (2025). LLMs meet Bloom's taxonomy: A cognitive view on large language model evaluations. In *Proceedings of the 31st International Conference on Computational Linguistics (COLING 2025)* (pp. 5234–5251). Association for Computational Linguistics. https://aclanthology.org/2025.coling-main.350/
 
