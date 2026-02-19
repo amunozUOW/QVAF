@@ -447,8 +447,8 @@ RECALL_STEM_PATTERNS = [
     r'^what\s+(?:is|are)\s+\w+.*\??\s*$',
     # "Define [term]" / "Define the term [term]"
     r'^define\s+',
-    # "Which of the following (?:best )?defines [term]?"
-    r'which\s+of\s+the\s+following\s+(?:best\s+)?(?:defines?|is the definition of)',
+    # "Which of the following [statements/options/...] (?:best )?defines [term]?"
+    r'which\s+of\s+the\s+following\s+(?:\w+\s+){0,2}(?:best\s+)?(?:defines?|is the definition of)',
     # "What does [term] mean?"
     r'^what\s+does\s+\w+.*\s+mean',
     # "What does [acronym] stand for?"

@@ -104,6 +104,14 @@ class TestRecallByStem:
     def test_which_best_defines(self):
         assert _is_recall_by_stem("Which of the following best defines lean manufacturing?") is True
 
+    def test_which_statements_best_defines(self):
+        """Filler words like 'statements' between 'following' and 'defines'."""
+        assert _is_recall_by_stem("Which of the following statements best defines inventory?") is True
+
+    def test_which_options_defines(self):
+        """Filler word 'options' between 'following' and 'defines'."""
+        assert _is_recall_by_stem("Which of the following options defines throughput?") is True
+
     def test_what_does_stand_for(self):
         assert _is_recall_by_stem("What does BOM stand for?") is True
 
