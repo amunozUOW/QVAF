@@ -59,38 +59,71 @@ questions. The SME interprets these patterns and decides what action to take.
 question_type_system = """
 COGNITIVE DEMAND CLASSIFICATION SYSTEM
 
-Classify the question into ONE of these categories based on what type of 
-thinking is PRIMARILY required:
+Classify the question into ONE of these categories based on what type of
+thinking is PRIMARILY required. Choose the LOWEST category that fully describes
+the cognitive demand — do NOT over-classify.
 
 1. RECALL
    - Direct retrieval of memorised facts, definitions, or procedures
    - Recognition of previously learned information
+   - Identifying which term, name, or category something belongs to
    - No transformation of knowledge required
-   - Examples: "Define X", "What is the name of Y", "List the components of Z"
+   - Examples: "Define X", "What is the name of Y", "List the components of Z",
+     "Which stage of the product life cycle has the highest growth?"
 
-2. ROUTINE APPLICATION  
-   - Applying a known procedure where method selection is obvious
+2. ROUTINE APPLICATION
+   - Applying a known procedure or definition to a specific scenario
+   - Matching a described situation to the correct category or concept
    - Following established steps to reach a solution
    - Minimal judgment required about which approach to use
-   - Examples: "Calculate X using formula Y", "Apply the standard procedure to..."
+   - Examples: "Calculate X using formula Y", "This scenario describes which type of...",
+     "Classify this example as..."
 
 3. CONCEPTUAL UNDERSTANDING
    - Demonstrating understanding of relationships between concepts
    - Explaining mechanisms, causes, or effects
    - Comparing or contrasting related ideas
-   - Examples: "Explain why X causes Y", "How does A relate to B"
+   - Requires understanding WHY, not just WHAT
+   - Examples: "Explain why X causes Y", "How does A relate to B",
+     "What distinguishes concept X from concept Y?"
 
 4. ANALYTICAL REASONING
-   - Breaking down complex information into components
-   - Evaluating evidence to draw conclusions
-   - Making judgments based on criteria
-   - Examples: "Analyze the data to determine...", "Evaluate the argument for..."
+   - Breaking down complex, multi-part information to draw conclusions
+   - Evaluating competing evidence or arguments
+   - Making judgments based on multiple criteria simultaneously
+   - Requires NOVEL analysis, not just applying known categories
+   - Examples: "Given this data set, determine...", "Evaluate which strategy is
+     most effective considering factors A, B, and C"
 
 5. STRATEGIC INTEGRATION
-   - Synthesizing information from multiple sources
-   - Applying knowledge to novel, non-routine situations
-   - Creating solutions that require integration of multiple concepts
-   - Examples: "Design a solution for...", "How would you address this new scenario..."
+   - Synthesizing information from multiple sources into a new solution
+   - Applying knowledge to genuinely novel, non-routine situations
+   - Creating or designing something that requires integrating multiple concepts
+   - Examples: "Design a solution for...", "How would you address this entirely new scenario..."
+
+CLASSIFICATION RULES:
+- If a question asks you to IDENTIFY or NAME something from a known list → RECALL
+- If a question asks you to MATCH a scenario to a known category → ROUTINE APPLICATION
+- If a question asks you to EXPLAIN WHY or COMPARE concepts → CONCEPTUAL UNDERSTANDING
+- Only use ANALYTICAL REASONING if the question requires evaluating novel evidence or data
+- Only use STRATEGIC INTEGRATION if the question requires creating/designing something new
+
+WORKED EXAMPLES:
+
+Q: "Which of the four product life cycle stages experiences the highest increase in sales rate?"
+→ CATEGORY: RECALL (Identifying a characteristic of a named stage from textbook knowledge)
+
+Q: "Additional finished ice cream held on site, not allocated to a customer, represents which type of waste?"
+→ CATEGORY: ROUTINE APPLICATION (Matching a described scenario to a Lean waste category)
+
+Q: "Which of the following are classifiable as transforming resources?"
+→ CATEGORY: CONCEPTUAL UNDERSTANDING (Requires understanding the distinction between transforming and transformed resources, then applying it)
+
+Q: "Given sales data for Q1-Q4, which product line should the company discontinue and why?"
+→ CATEGORY: ANALYTICAL REASONING (Requires evaluating multiple data points to draw a conclusion)
+
+Q: "Design a supply chain strategy for a new product entering a market with these constraints..."
+→ CATEGORY: STRATEGIC INTEGRATION (Requires synthesizing multiple concepts into a novel solution)
 """
 
 
@@ -236,9 +269,11 @@ KEY COGNITIVE DEMAND: Understanding relationships between ideas
 """
 
     try:
-        response = ollama.chat(model=ANALYSIS_MODEL, messages=[
-            {'role': 'user', 'content': prompt}
-        ])
+        response = ollama.chat(
+            model=ANALYSIS_MODEL,
+            messages=[{'role': 'user', 'content': prompt}],
+            options={'temperature': 0, 'num_predict': 256}
+        )
         return response['message']['content']
     except Exception as e:
         return f"CATEGORY: UNKNOWN\nRATIONALE: Classification failed: {e}"
@@ -428,10 +463,14 @@ RECOMMENDATIONS FOR EDUCATOR:
     
     try:
         global ANALYSIS_MODEL
-        response = ollama.chat(model=ANALYSIS_MODEL, messages=[
-            {'role': 'system', 'content': system_message},
-            {'role': 'user', 'content': prompt}
-        ])
+        response = ollama.chat(
+            model=ANALYSIS_MODEL,
+            messages=[
+                {'role': 'system', 'content': system_message},
+                {'role': 'user', 'content': prompt}
+            ],
+            options={'temperature': 0, 'num_predict': 1024}
+        )
         return response['message']['content']
     except Exception as e:
         return f"Analysis failed: {e}"
