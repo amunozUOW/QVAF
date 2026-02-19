@@ -94,7 +94,9 @@ RECALL even if the options include nuanced or overlapping definitions.
 
 Examples:
   "What is the definition of [term]?"
-  "What is [concept]?" (selecting the correct definition from options)
+  "What is [concept]?" (selecting the correct definition from options —
+   RECALL even when options include analogies, metaphors, or competing
+   formal definitions that appear complex)
   "In what year did [event] occur?"
   "What does [acronym] stand for?"
   "Which [item] has the highest [property]?" (when answerable from a
@@ -429,10 +431,19 @@ def classify_question_type(question_text, options=None):
 QUESTION TO CLASSIFY:
 {question_text}{options_text}
 
+CRITICAL REMINDER BEFORE CLASSIFYING:
+- Classify based on the QUESTION STEM only. The answer options do NOT
+  change the cognitive demand of the question.
+- If the question stem is "What is [term]?" or "Define [term]" or asks
+  the student to select a definition, it is RECALL — even if the options
+  are complex, overlapping, or use analogies and metaphors.
+- Apply the boundary decision flowchart starting from Level 1 (RECALL)
+  and stop at the FIRST level that fits.
+
 IMPORTANT: Respond in EXACTLY this format. The category MUST be one of: RECALL, ROUTINE APPLICATION, CONCEPTUAL UNDERSTANDING, ANALYTICAL REASONING, or STRATEGIC INTEGRATION.
 
 CATEGORY: [write the full category name here]
-RATIONALE: [one sentence explanation]
+RATIONALE: [one sentence explanation referencing the question STEM, not the options]
 KEY COGNITIVE DEMAND: [what the question primarily requires]
 
 Example response:
