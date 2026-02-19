@@ -44,7 +44,8 @@ def test_single_question(question: str, options: dict, correct_answer: str, mode
         except:
             pass
 
-    # Use the optimized v4 prompt
+    # Use the optimized v4 prompt with calibrated confidence elicitation
+    # (0-9 probability scale per Yang et al., 2024; "consider the opposite" per Chhikara et al., 2025)
     prompt = f"""TASK: Answer this question correctly.
 
 QUESTION: {question}
@@ -69,16 +70,29 @@ ANALYSIS STEPS:
 
 5. FINAL SELECTION: From options marked KEEP, select the single best answer.
 
-6. CONFIDENCE: Rate how confident you are that your final selection is the correct answer. Rate your confidence in this answer on a scale of 0-100.
+6. DOUBT CHECK: Before rating your probability, consider: what is the strongest argument AGAINST your chosen answer? What would make an alternative option correct instead?
 
 === REQUIRED OUTPUT FORMAT ===
-After your analysis, you MUST write these three lines:
+After your analysis, you MUST write these four lines:
 
 ANSWER: [write ONE letter: A, B, C, D, or E] (if there are more than five options choose the correct answer from all the options)
-CONFIDENCE: [write a number from 0 to 100]
-REASONING: [write 1-2 sentence explaining why]
+PROBABILITY: [write a single digit 0-9 using the scale below]
+REASONING: [write 1-2 sentences explaining why]
+DOUBT: [write one sentence about what could make your answer wrong]
 
-Do not write anything after the REASONING line.
+PROBABILITY SCALE — rate the probability your answer is correct:
+  0 = I am guessing randomly, I have no basis for this answer
+  1 = Very unlikely correct, almost certainly wrong
+  2 = Unlikely correct, I see major problems with my reasoning
+  3 = Somewhat unlikely, notable gaps in my reasoning
+  4 = Slightly below even odds, could easily be wrong
+  5 = About even odds, roughly a coin flip between options
+  6 = Slightly more likely correct than not
+  7 = Probably correct, but alternative answers are plausible
+  8 = Likely correct with only minor reservations
+  9 = Near certain, I would be very surprised if wrong
+
+Do not write anything after the DOUBT line.
 
 Begin your analysis:"""
 

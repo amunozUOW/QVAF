@@ -252,6 +252,8 @@ QVAF classifies each question using a five-level cognitive demand taxonomy that 
 
 ### Interpreting Confidence Scores
 
+QVAF elicits confidence using a calibrated 0–9 probability scale, converted to a 0–100% display value. This approach addresses the well-documented problem of LLM overconfidence, where models asked to rate confidence on a 0–100 scale overwhelmingly cluster at 80–90% (Xiong et al., 2024). The 0–9 scale produces better-calibrated scores for small models (Yang et al., 2024), and a "consider the opposite" debiasing step forces the AI to identify counter-arguments before rating its probability (Chhikara et al., 2025). See the [literature review](QVAF_Literature_Review.md#31-confidence-calibration-techniques) for details.
+
 - **High confidence (80%+) + Correct**: AI found this easy
 - **High confidence + Incorrect**: AI was confidently wrong (interesting signal!)
 - **Low confidence (<50%)**: AI was uncertain—question may be resistant

@@ -25,8 +25,12 @@ Research on LLM reliability identifies patterns relevant to assessment vulnerabi
 
 Ouyang et al. (2025) examined non-determinism in LLM outputs and found that LLMs produce different responses even at temperature = 0 due to batching, floating-point operation ordering, and GPU parallelism effects. Thinking Machines Lab (2025) demonstrated this pattern by submitting 1,000 identical prompts and receiving 80 different responses, with divergence occurring after approximately 100 tokens. Khatun and Brown (2024) found that models showed vulnerability to prompt variations, with performance gaps across different phrasings of identical queries. Such variability in responses, despite setting temperature to zero will be inherent in the QVAF as well as in settings where students misuse genAI. However, student use of AI may not occur under temperature=0 settings and higher variability may be observed. For the time being, the QVAF temperature is fixed at zero to minimise stochasticity, especially across repeated observations.
 
+### 3.1 Confidence Calibration Techniques
+
+Research on improving LLM confidence calibration has identified several prompt-based techniques that do not require model fine-tuning or access to internal token probabilities. Yang et al. (2024) compared verbalized confidence elicitation methods across model sizes and found that for smaller models (7B–8B parameters), a coarser probability scale (0–9) produced substantially better calibration than the standard 0–100 scale, with Expected Calibration Error (ECE) of 7.6 versus significantly higher ECE values on the 0–100 scale. The authors also found that asking for "the probability that your answer is correct" (the probscore formulation) outperformed asking for "confidence level" on small models. Chhikara et al. (2025) drew on the cognitive psychology strategy of "consider the opposite" and found that presenting questions with plausible distractors reduced miscalibration by up to 90% in ECE, with relative accuracy improvements up to 460%. This approach forces the model to weigh alternatives before committing to a confidence estimate. Yoon and Kim (2025) demonstrated that models engaging in extended chain-of-thought reasoning before stating confidence achieved better calibration in 33 of 36 experimental settings, with gains traced to "slow thinking" behaviours such as exploring alternatives and backtracking. QVAF incorporates these findings by using a 0–9 probability scale with behavioural anchors at each level, a "consider the opposite" debiasing step (the doubt check), and the probscore formulation. Scores are converted to a 0–100 percentage for display.
+
 ---
-### 3.1 Retrieval-Augmented Generation
+### 3.2 Retrieval-Augmented Generation
 ---
 Lewis et al. (2020) introduced Retrieval-Augmented Generation (RAG) for knowledge-intensive NLP tasks at NeurIPS 2020, establishing an architecture for grounding LLM responses in retrieved documents. However, the use of RAG systems does not guarantee an elimination of hallucinations. Magesh et al. (2024) evaluated legal RAG systems and found that systems hallucinated 17–33% of responses. The authors concluded that vendor claims regarding hallucination-free systems were not supported by empirical evidence.
 
@@ -217,4 +221,8 @@ Thinking Machines Lab. (2025, September). When LLMs surprise you: 1,000 identica
 Webb, N. L. (1997). *Criteria for alignment of expectations and assessments in mathematics and science education* (Research Monograph No. 6). National Institute for Science Education, University of Wisconsin-Madison.
 
 Xiong, M., Hu, Z., Lu, X., Li, Y., Fu, J., He, J., & Hooi, B. (2024). Can LLMs express their uncertainty? An empirical evaluation of confidence elicitation in LLMs. In *Proceedings of the Twelfth International Conference on Learning Representations (ICLR 2024)*. https://openreview.net/forum?id=gjeQKFxFpZ
+
+Yang, D., Yao, J., & Xiang, T. (2024). On verbalized confidence scores for LLMs. *arXiv preprint arXiv:2412.14737*. https://arxiv.org/abs/2412.14737
+
+Yoon, D., Kim, S., Kim, J., & Yun, S.-Y. (2025). Reasoning models better express their confidence. *arXiv preprint arXiv:2505.14489*. https://arxiv.org/abs/2505.14489
 

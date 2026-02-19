@@ -382,7 +382,7 @@ def process_question_links(page, q_elem, base_url, debug=False):
 
 def build_prompt(question, options, rag_context="", image_context="", link_context=""):
     options_text = "\n".join([f"{k}. {v}" for k, v in options.items()])
-    
+
     context_parts = []
     if rag_context:
         context_parts.append(f"COURSE MATERIALS:\n{rag_context}")
@@ -390,9 +390,9 @@ def build_prompt(question, options, rag_context="", image_context="", link_conte
         context_parts.append(f"IMAGE CONTENT:\n{image_context}")
     if link_context:
         context_parts.append(f"LINKED CONTENT:\n{link_context}")
-    
+
     context_block = "\n\n".join(context_parts)
-    
+
     # Build the list of valid option letters from the actual options provided
     option_letters = sorted(options.keys())
     letters_str = ", ".join(option_letters) if option_letters else "A, B, C, D, or E"
@@ -406,14 +406,25 @@ OPTIONS:
 
 {context_block}
 
-First, state your answer as a single choice. Then quantify how confident you are that the choice is the correct answer to the question. Please explain briefly your reasoning. Be concise but thorough, as the question may be tricky and require careful thought.
+First, evaluate each option briefly. Then state your answer as a single choice. Before rating your probability, consider what is the strongest argument AGAINST your chosen answer. Then rate the probability that your answer is correct and explain your reasoning.
 
 Format your response EXACTLY like this:
 ANSWER: X
-CONFIDENCE: N
+PROBABILITY: N
 REASONING: Your explanation here
+DOUBT: What could make your answer wrong
 
-where X is one of the options ({letters_str}) and N is a number from 0 to 100.
+where X is one of the options ({letters_str}) and N is a single digit 0-9:
+  0 = guessing randomly
+  1 = very unlikely correct
+  2 = unlikely, major problems with reasoning
+  3 = somewhat unlikely, notable gaps
+  4 = slightly below even odds
+  5 = about even odds, coin flip
+  6 = slightly more likely correct than not
+  7 = probably correct, but alternatives are plausible
+  8 = likely correct, only minor reservations
+  9 = near certain, would be very surprised if wrong
 
 Your response:"""
 
@@ -432,7 +443,7 @@ def call_llm_single(prompt, model):
         )
         return response['message']['content']
     except Exception as e:
-        return f"ANSWER: A\nCONFIDENCE: 0\nREASONING: Error: {e}"
+        return f"ANSWER: A\nPROBABILITY: 0\nREASONING: Error: {e}"
 
 
 def call_llm_multi_sample(prompt, model, num_samples):

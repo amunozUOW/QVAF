@@ -44,10 +44,8 @@ INSTRUCTIONS:
 
 IMPORTANT: You MUST end your response with exactly this format:
 ANSWER: [single letter A, B, C, D, or E]
-CONFIDENCE: [number from 0 to 100]
+PROBABILITY: [single digit 0-9, where 0=random guess, 5=coin flip, 9=near certain]
 REASONING: [one sentence explaining your choice]
-
-Confidence guide: 90-100 = certain, 70-89 = confident, 50-69 = educated guess, below 50 = uncertain
 
 Begin your analysis:"""
 
@@ -76,7 +74,7 @@ If the question requires calculation, show your working.
 
 Then provide your final answer in EXACTLY this format:
 ANSWER: [letter]
-CONFIDENCE: [0-100]
+PROBABILITY: [0-9, where 0=random guess, 5=coin flip, 9=near certain]
 REASONING: [brief explanation]"""
 
 
@@ -113,10 +111,10 @@ From the options marked KEEP, which is the best match?
 
 REQUIRED OUTPUT FORMAT (must appear at end of response):
 ANSWER: X
-CONFIDENCE: N
+PROBABILITY: N
 REASONING: Your explanation
 
-Where X is exactly one letter (A, B, C, D, or E) and N is a number 0-100.
+Where X is exactly one letter (A, B, C, D, or E) and N is a single digit 0-9 (0=random guess, 5=coin flip, 9=near certain).
 
 Begin:"""
 
@@ -127,9 +125,12 @@ def optimized_prompt_v4(question: str, options: dict, context: str = "") -> str:
     - v3's structured analysis (gets conceptual Q1 right)
     - Stronger format enforcement (prevents ? failures)
     - Explicit reminder about format at the end
+    - Calibrated confidence via 0-9 probability scale (Yang et al., 2024)
+    - "Consider the opposite" debiasing (Chhikara et al., 2025)
+    - Probscore formulation for small models (Yang et al., 2024)
     """
     options_text = "\n".join([f"{k}. {v}" for k, v in sorted(options.items())])
-    
+
     return f"""TASK: Answer this multiple choice question correctly.
 
 QUESTION: {question}
@@ -154,14 +155,29 @@ ANALYSIS STEPS:
 
 5. FINAL SELECTION: From options marked KEEP, select the single best answer.
 
+6. DOUBT CHECK: Before rating your probability, consider: what is the strongest argument AGAINST your chosen answer? What would make an alternative option correct instead?
+
 === REQUIRED OUTPUT FORMAT ===
-After your analysis, you MUST write these three lines:
+After your analysis, you MUST write these four lines:
 
 ANSWER: [write ONE letter: A, B, C, D, or E]
-CONFIDENCE: [write a number from 0 to 100]
+PROBABILITY: [write a single digit 0-9 using the scale below]
 REASONING: [write one sentence explaining why]
+DOUBT: [write one sentence about what could make your answer wrong]
 
-Do not write anything after the REASONING line.
+PROBABILITY SCALE — rate the probability your answer is correct:
+  0 = I am guessing randomly, I have no basis for this answer
+  1 = Very unlikely correct, almost certainly wrong
+  2 = Unlikely correct, I see major problems with my reasoning
+  3 = Somewhat unlikely, notable gaps in my reasoning
+  4 = Slightly below even odds, could easily be wrong
+  5 = About even odds, roughly a coin flip between options
+  6 = Slightly more likely correct than not
+  7 = Probably correct, but alternative answers are plausible
+  8 = Likely correct with only minor reservations
+  9 = Near certain, I would be very surprised if wrong
+
+Do not write anything after the DOUBT line.
 
 Begin your analysis:"""
 

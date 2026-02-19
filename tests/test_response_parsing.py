@@ -203,6 +203,70 @@ class TestExtractConfidence:
 
 
 # ============================================
+# PROBABILITY SCALE TESTS (0-9 → 0-100)
+# ============================================
+# The 0-9 probability scale (Yang et al., 2024) produces better-calibrated
+# confidence scores for small models like Llama3-8B. These tests verify the
+# PROBABILITY: format is parsed correctly and converted to 0-100.
+
+class TestProbabilityScale:
+    """Tests for the 0-9 probability scale (preferred format)."""
+
+    def test_probability_zero(self):
+        """PROBABILITY: 0 means random guess → 0%."""
+        assert extract_confidence("PROBABILITY: 0") == 0
+
+    def test_probability_five(self):
+        """PROBABILITY: 5 means coin flip → 56%."""
+        assert extract_confidence("PROBABILITY: 5") == 56
+
+    def test_probability_nine(self):
+        """PROBABILITY: 9 means near certain → 100%."""
+        assert extract_confidence("PROBABILITY: 9") == 100
+
+    def test_probability_seven(self):
+        """PROBABILITY: 7 means probably correct → 78%."""
+        assert extract_confidence("PROBABILITY: 7") == 78
+
+    def test_probability_three(self):
+        """PROBABILITY: 3 means somewhat unlikely → 33%."""
+        assert extract_confidence("PROBABILITY: 3") == 33
+
+    def test_probability_one(self):
+        """PROBABILITY: 1 means very unlikely → 11%."""
+        assert extract_confidence("PROBABILITY: 1") == 11
+
+    def test_probability_in_full_response(self):
+        """PROBABILITY extracted from a complete response with new format."""
+        text = "ANSWER: B\nPROBABILITY: 7\nREASONING: Because...\nDOUBT: Could be wrong if..."
+        assert extract_confidence(text) == 78
+
+    def test_probability_no_space(self):
+        """PROBABILITY:7 without space."""
+        assert extract_confidence("PROBABILITY:7") == 78
+
+    def test_probability_takes_precedence_over_confidence(self):
+        """If both PROBABILITY and CONFIDENCE are present, PROBABILITY wins."""
+        text = "PROBABILITY: 6\nCONFIDENCE: 90"
+        assert extract_confidence(text) == 67
+
+    def test_probability_large_number_fallback(self):
+        """If model writes PROBABILITY: 85 (ignoring instructions), treat as 0-100."""
+        assert extract_confidence("PROBABILITY: 85") == 85
+
+    def test_probability_over_100_clamped(self):
+        """PROBABILITY: 150 (model error) clamped to 100."""
+        assert extract_confidence("PROBABILITY: 150") == 100
+
+    def test_all_scale_values(self):
+        """Verify all 10 values of the 0-9 scale produce expected percentages."""
+        expected = {0: 0, 1: 11, 2: 22, 3: 33, 4: 44, 5: 56, 6: 67, 7: 78, 8: 89, 9: 100}
+        for val, pct in expected.items():
+            assert extract_confidence(f"PROBABILITY: {val}") == pct, \
+                f"PROBABILITY: {val} should map to {pct}%"
+
+
+# ============================================
 # REASONING EXTRACTION TESTS
 # ============================================
 # These test the extract_reasoning() function which captures the AI's
@@ -314,3 +378,34 @@ REASONING: Paris has been the capital of France since the late 10th century, mak
         assert answer == "B"
         assert confidence == 95
         assert "Paris" in reasoning
+
+    def test_new_probability_format_full_parse(self):
+        """Full parse of the new probability format with DOUBT line."""
+        text = """QUESTION TYPE: Recall
+
+KEY INSIGHT: Testing knowledge of European capitals.
+
+EVALUATE OPTIONS:
+A: [ELIMINATE] - London is the UK capital
+B: [KEEP] - Paris is the capital of France
+C: [ELIMINATE] - Berlin is Germany's capital
+D: [ELIMINATE] - Madrid is Spain's capital
+
+DOUBT CHECK: All major geography sources confirm Paris. No reasonable doubt.
+
+ANSWER: B
+PROBABILITY: 8
+REASONING: Paris has been the capital of France since the late 10th century.
+DOUBT: Could be wrong if the question refers to a historical period before Paris became capital."""
+        answer, confidence, reasoning = parse_llm_response(text)
+        assert answer == "B"
+        assert confidence == 89  # 8 on 0-9 scale → 89%
+        assert "Paris" in reasoning
+
+    def test_probability_uncertain_response(self):
+        """Low probability score indicates genuine uncertainty."""
+        text = "ANSWER: C\nPROBABILITY: 4\nREASONING: Not sure about this one.\nDOUBT: Options B and D are also plausible."
+        answer, confidence, reasoning = parse_llm_response(text)
+        assert answer == "C"
+        assert confidence == 44  # 4 on 0-9 scale → 44%
+        assert "Not sure" in reasoning

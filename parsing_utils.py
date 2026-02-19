@@ -98,8 +98,14 @@ def extract_confidence(text):
     """
     Extract and validate the confidence score from an LLM response.
 
-    Looks for "CONFIDENCE: 85" format and clamps the value to 0-100.
-    Returns 0 if no confidence value is found.
+    Supports two scales:
+    - PROBABILITY: 0-9 scale (preferred; see Yang et al., 2024 — best
+      calibration for Llama3-8B). Converted to 0-100 for display.
+    - CONFIDENCE: 0-100 scale (legacy fallback)
+
+    The 0-9 scale reduces the clustering at multiples of five observed
+    with 0-100 scales (Xiong et al., 2024) and produces more varied,
+    better-calibrated scores on small models (Yang et al., 2024).
 
     Parameters
     ----------
@@ -113,6 +119,10 @@ def extract_confidence(text):
 
     Examples
     --------
+    >>> extract_confidence("PROBABILITY: 7")
+    78
+    >>> extract_confidence("PROBABILITY: 9")
+    100
     >>> extract_confidence("CONFIDENCE: 85")
     85
     >>> extract_confidence("CONFIDENCE: 150")
@@ -123,10 +133,22 @@ def extract_confidence(text):
     if not text:
         return 0
 
-    match = re.search(r'CONFIDENCE:\s*(\d+)', text, re.IGNORECASE)
-    if match:
-        value = int(match.group(1))
-        # Clamp to valid range - LLMs sometimes output values > 100
+    # Primary: PROBABILITY on 0-9 scale (Yang et al., 2024)
+    prob_match = re.search(r'PROBABILITY:\s*(\d+)', text, re.IGNORECASE)
+    if prob_match:
+        value = int(prob_match.group(1))
+        if value <= 9:
+            # Convert 0-9 scale to 0-100 for consistent display
+            # 0→0, 1→11, 2→22, 3→33, 4→44, 5→56, 6→67, 7→78, 8→89, 9→100
+            return round(value * 100 / 9)
+        else:
+            # Model wrote a larger number despite instructions — treat as 0-100
+            return max(0, min(100, value))
+
+    # Fallback: CONFIDENCE on 0-100 scale (legacy prompts)
+    conf_match = re.search(r'CONFIDENCE:\s*(\d+)', text, re.IGNORECASE)
+    if conf_match:
+        value = int(conf_match.group(1))
         return max(0, min(100, value))
 
     return 0
