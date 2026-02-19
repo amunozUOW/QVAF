@@ -415,13 +415,33 @@ def get_confidence_flag(correct_without, conf_without, correct_with, conf_with):
 
 
 # ============================================
-# QUESTION TYPE CLASSIFICATION (via LLM)
+# QUESTION TYPE CLASSIFICATION (Hybrid: Rule-based + LLM)
 # ============================================
 
-# Rule-based patterns that are definitionally RECALL regardless of options.
-# These catch question stems where the LLM consistently over-classifies
-# due to option complexity (a known limitation of small models).
-# Patterns are applied to the question stem ONLY, before the LLM is called.
+# Rule-based stem patterns for all five cognitive demand categories.
+# These catch question stems where the linguistic structure makes the
+# cognitive demand unambiguous — e.g., "What is [term]?" is always RECALL,
+# "Explain why [X]" is always CONCEPTUAL UNDERSTANDING.
+#
+# Design principles:
+# 1. HIGH CONFIDENCE ONLY: Patterns match obvious/clear-cut cases.
+#    Ambiguous questions fall through to the LLM.
+# 2. HIGHEST FIRST: Categories are checked from Level 5 (Strategic
+#    Integration) down to Level 1 (Recall) so that a question matching
+#    a higher level is never under-classified.
+# 3. LONG-STEM ESCAPE: Questions with stems exceeding MAX_RULE_STEM_LENGTH
+#    characters bypass rule-based classification (except for Recall, which
+#    has its own anchored patterns) because scenario descriptions require
+#    LLM interpretation.
+# 4. CONSERVATIVE: When in doubt, the question goes to the LLM. It is
+#    better to send a clear-cut question to the LLM (which may classify
+#    it correctly anyway) than to misclassify it with a regex.
+
+# Maximum stem length for rule-based classification (non-RECALL categories).
+# Longer stems typically contain scenario descriptions that require
+# LLM interpretation.
+MAX_RULE_STEM_LENGTH = 250
+
 RECALL_STEM_PATTERNS = [
     # "What is [term]?" / "What is [term] in [context]?"
     r'^what\s+(?:is|are)\s+\w+.*\??\s*$',
@@ -441,23 +461,182 @@ RECALL_STEM_PATTERNS = [
 ]
 
 
+def _prepare_stem(question_text):
+    """
+    Normalise question text for rule-based pattern matching.
+
+    Lowercases, strips whitespace, and removes leading question numbers
+    (e.g., "Question 1:", "Q3."). Returns the cleaned stem.
+    """
+    stem = question_text.strip().lower()
+    # Remove leading question numbers like "Question 1:" or "Q1."
+    stem = re.sub(r'^(?:question\s+\d+\s*[:.]?\s*|q\d+\s*[:.]?\s*)', '', stem)
+    return stem.strip()
+
+
 def _is_recall_by_stem(question_text):
     """
     Rule-based pre-classifier: check if the question stem is a direct
     definition/identification question that is definitionally RECALL.
 
     Returns True if the stem matches a known RECALL pattern, False otherwise.
-    When True, the LLM classifier is bypassed for the category (but still
-    called for rationale generation).
+    When True, the LLM classifier is bypassed entirely.
 
     This exists because small LLMs (8B parameters) consistently over-classify
     "What is [term]?" questions as Routine Application when complex answer
     options are present, despite explicit instructions to focus on the stem.
     """
-    stem = question_text.strip().lower()
-    # Remove leading question numbers like "Question 1:" or "Q1."
-    stem = re.sub(r'^(?:question\s+\d+\s*[:.]?\s*|q\d+\s*[:.]?\s*)', '', stem)
+    stem = _prepare_stem(question_text)
     for pattern in RECALL_STEM_PATTERNS:
+        if re.search(pattern, stem, re.IGNORECASE):
+            return True
+    return False
+
+
+# --- ROUTINE APPLICATION patterns ---
+# Conservative: only catches explicit computational/procedural stems.
+# "Given [data], determine [value]" is intentionally EXCLUDED because
+# it is ambiguous — could be Analytical Reasoning if trade-offs are involved.
+ROUTINE_APPLICATION_STEM_PATTERNS = [
+    # "Calculate [X] using [formula/method]" — explicit formula reference
+    r'^calculate\s+.*\s+using\s+',
+    # "Using [method/formula], [calculate/determine/find/solve]..."
+    r'^using\s+(?:the\s+)?(?:\w+\s+){0,4}(?:formula|method|equation|model|approach|technique)\s*,?\s*(?:calculate|determine|find|solve|compute)',
+    # "Compute/Calculate the [metric]"
+    r'^(?:compute|calculate)\s+the\s+',
+    # "What will this [code/program] output/return?"
+    r'what\s+(?:will|would|does)\s+(?:this|the)\s+(?:code|program|function|script|algorithm|procedure|snippet)\s+(?:output|produce|return|print|display|generate)',
+    # "Solve for [X]" / "Solve the following [equation/problem]"
+    r'^solve\s+(?:for|the)\s+',
+    # "Classify this [scenario/example/case] as..."
+    r'^classify\s+(?:this|the\s+following)\s+',
+]
+
+
+def _is_routine_application_by_stem(question_text):
+    """
+    Rule-based pre-classifier for ROUTINE APPLICATION questions.
+
+    Catches explicit computational/procedural stems like "Calculate [X]
+    using [formula]" or "Solve for [X]". Conservative — ambiguous stems
+    (e.g., "Given [data], determine [value]") fall through to the LLM.
+    """
+    stem = _prepare_stem(question_text)
+    if len(stem) > MAX_RULE_STEM_LENGTH:
+        return False
+    for pattern in ROUTINE_APPLICATION_STEM_PATTERNS:
+        if re.search(pattern, stem, re.IGNORECASE):
+            return True
+    return False
+
+
+# --- CONCEPTUAL UNDERSTANDING patterns ---
+# Catches WHY/HOW/compare/distinguish stems that require explaining
+# relationships or mechanisms. "How many" and "How much" are explicitly
+# excluded (those are computational, not conceptual).
+CONCEPTUAL_UNDERSTANDING_STEM_PATTERNS = [
+    # "Explain why [X causes Y]"
+    r'^explain\s+why\s+',
+    # "Why does/do/is/are [phenomenon] occur/...?"
+    r'^why\s+(?:does|do|is|are|did|would|might|should)\s+',
+    # "How does [variable] affect [outcome]?" — excludes "How many/much"
+    r'^how\s+(?:does|do|would|might|could|can)\s+(?!many|much)',
+    # "Compare and contrast [A] and [B]"
+    r'compare\s+and\s+contrast\s+',
+    # "What distinguishes [A] from [B]?"
+    r'what\s+distinguishes?\s+\w+.*\s+from\s+',
+    # "What is the relationship between [A] and [B]?"
+    r'what\s+is\s+the\s+relationship\s+between\s+',
+    # "What is the difference between [A] and [B]?"
+    r'what\s+is\s+the\s+(?:difference|distinction)\s+between\s+',
+    # "Explain how [process/concept] [works/functions]"
+    r'^explain\s+how\s+',
+]
+
+
+def _is_conceptual_understanding_by_stem(question_text):
+    """
+    Rule-based pre-classifier for CONCEPTUAL UNDERSTANDING questions.
+
+    Catches stems that ask WHY or HOW concepts relate, or require
+    comparing/contrasting ideas. "How many/much" is excluded (computational).
+    """
+    stem = _prepare_stem(question_text)
+    if len(stem) > MAX_RULE_STEM_LENGTH:
+        return False
+    for pattern in CONCEPTUAL_UNDERSTANDING_STEM_PATTERNS:
+        if re.search(pattern, stem, re.IGNORECASE):
+            return True
+    return False
+
+
+# --- ANALYTICAL REASONING patterns ---
+# Requires evaluative verb + analytical object. Plain "evaluate" (as in
+# mathematical evaluation) is excluded by requiring specific analytical
+# nouns (effectiveness, validity, etc.) after the verb.
+ANALYTICAL_REASONING_STEM_PATTERNS = [
+    # "Evaluate the [effectiveness/validity/approach/argument]..."
+    r'^evaluate\s+the\s+(?:effectiveness|validity|strengths?|weaknesses?|approach|argument|evidence|trade.?offs?)',
+    # "Assess the [validity/effectiveness/impact] of..."
+    r'^assess\s+the\s+(?:validity|effectiveness|impact|reliability|credibility)\s+of\s+',
+    # "Critique the [following] [argument/approach/study]..."
+    r'^critique\s+the\s+(?:following\s+)?(?:argument|approach|study|claim|theory|method)',
+    # "What conclusions can you draw from [evidence/data]?"
+    r'^what\s+conclusions?\s+can\s+(?:you|be)\s+draw',
+    # "Judge which [option] is most [criteria]..."
+    r'^judge\s+which\s+',
+    # "Analyse/Analyze [X] to determine..."
+    r'^(?:analyse|analyze)\s+.*\s+to\s+determine\s+',
+]
+
+
+def _is_analytical_reasoning_by_stem(question_text):
+    """
+    Rule-based pre-classifier for ANALYTICAL REASONING questions.
+
+    Catches stems that require evaluating evidence, weighing trade-offs,
+    or making justified judgments. Mathematical "evaluate" is excluded
+    by requiring specific analytical nouns after the verb.
+    """
+    stem = _prepare_stem(question_text)
+    if len(stem) > MAX_RULE_STEM_LENGTH:
+        return False
+    for pattern in ANALYTICAL_REASONING_STEM_PATTERNS:
+        if re.search(pattern, stem, re.IGNORECASE):
+            return True
+    return False
+
+
+# --- STRATEGIC INTEGRATION patterns ---
+# Very restrictive — requires creative verb + multi-domain/integration
+# language. This level is rare in MCQ format. "Design an experiment"
+# alone does NOT match (single domain); the pattern requires explicit
+# multi-constraint or integration language.
+STRATEGIC_INTEGRATION_STEM_PATTERNS = [
+    # "Design/Create/Develop a [X] that integrates/combines/addresses..."
+    r'^(?:design|create|develop|propose|formulate|devise)\s+a\s+\w+.*\s+that\s+(?:addresses|integrates?|combines?|synthesises?|synthesizes?|balances)',
+    # "Propose a/an comprehensive/integrated/holistic [approach]..."
+    r'^propose\s+an?\s+(?:comprehensive|integrated|holistic)\s+',
+    # "Develop a [X] considering competing/multiple/conflicting..."
+    r'^develop\s+a\s+\w+.*\s+considering\s+(?:competing|multiple|conflicting)',
+    # "Synthesise/Synthesize [A] and [B] to create/design..."
+    r'^(?:synthesise|synthesize)\s+.*\s+(?:to|and)\s+(?:create|design|propose|develop)',
+]
+
+
+def _is_strategic_integration_by_stem(question_text):
+    """
+    Rule-based pre-classifier for STRATEGIC INTEGRATION questions.
+
+    Catches stems that require synthesising across multiple domains or
+    frameworks. Very restrictive — "Design an experiment" alone does NOT
+    match; explicit multi-constraint or integration language is required.
+    This level is rare in MCQ format.
+    """
+    stem = _prepare_stem(question_text)
+    if len(stem) > MAX_RULE_STEM_LENGTH:
+        return False
+    for pattern in STRATEGIC_INTEGRATION_STEM_PATTERNS:
         if re.search(pattern, stem, re.IGNORECASE):
             return True
     return False
@@ -467,15 +646,63 @@ def classify_question_type(question_text, options=None):
     """
     Classify question into cognitive demand category.
 
-    Uses a two-stage approach:
-    1. Rule-based pre-classifier catches obvious RECALL stems (e.g.,
-       "What is [term]?") that small LLMs consistently misclassify.
-    2. LLM-based classifier handles all other questions using the full
-       cognitive demand taxonomy.
+    Uses a two-stage hybrid approach:
+    1. Rule-based pre-classifier catches obvious stems for ALL FIVE
+       cognitive demand categories. Patterns are high-confidence only;
+       they target clear-cut linguistic markers (imperative verbs,
+       interrogative structures) in the question stem. Checked from
+       highest to lowest category so that a question matching a higher
+       level is never under-classified.
+    2. LLM-based classifier handles all remaining questions using the
+       full cognitive demand taxonomy with boundary decision flowchart.
+
+    The rule-based stage exists because small LLMs (8B parameters)
+    consistently misclassify certain question types:
+    - "What is [term]?" over-classified as Routine Application
+    - "Explain why [X]" under-classified as Recall
+    - "Evaluate the [approach]" under-classified as Conceptual Understanding
     """
     global ANALYSIS_MODEL
 
-    # Stage 1: Rule-based pre-classification for known RECALL patterns
+    # Stage 1: Rule-based pre-classification (highest category first)
+    # Check from Level 5 down to Level 1 so higher matches take priority
+
+    if _is_strategic_integration_by_stem(question_text):
+        return (
+            f"CATEGORY: STRATEGIC INTEGRATION\n"
+            f"RATIONALE: The question stem requires designing or synthesising "
+            f"a solution that integrates multiple frameworks or domains.\n"
+            f"KEY COGNITIVE DEMAND: Synthesising across domains to create "
+            f"a novel solution"
+        )
+
+    if _is_analytical_reasoning_by_stem(question_text):
+        return (
+            f"CATEGORY: ANALYTICAL REASONING\n"
+            f"RATIONALE: The question stem requires evaluating evidence, "
+            f"weighing trade-offs, or making a justified judgment.\n"
+            f"KEY COGNITIVE DEMAND: Evaluating competing evidence or "
+            f"criteria to reach a justified conclusion"
+        )
+
+    if _is_conceptual_understanding_by_stem(question_text):
+        return (
+            f"CATEGORY: CONCEPTUAL UNDERSTANDING\n"
+            f"RATIONALE: The question stem asks why or how concepts relate, "
+            f"requiring explanation of underlying mechanisms or relationships.\n"
+            f"KEY COGNITIVE DEMAND: Explaining relationships, mechanisms, "
+            f"or principles connecting concepts"
+        )
+
+    if _is_routine_application_by_stem(question_text):
+        return (
+            f"CATEGORY: ROUTINE APPLICATION\n"
+            f"RATIONALE: The question stem requires applying a known "
+            f"procedure, formula, or classification to a specific case.\n"
+            f"KEY COGNITIVE DEMAND: Selecting and executing a known "
+            f"procedure or classification scheme"
+        )
+
     if _is_recall_by_stem(question_text):
         return (
             f"CATEGORY: RECALL\n"
