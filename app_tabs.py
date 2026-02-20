@@ -229,7 +229,7 @@ def render_first_scan_tab(tab_obj):
                         # Both scans done
                         st.success("Both scans complete! Go to **Results** for full analysis.")
                         st.markdown("")
-                        if st.button("Generate Report", type="primary", use_container_width=True):
+                        if st.button("Generate Report", key="gen_report_first_scan_full", type="primary", use_container_width=True):
                             st.session_state.navigate_to = 'results'
                             st.session_state._nav_pending = False
                             st.rerun()
@@ -361,7 +361,7 @@ def render_second_scan_tab(tab_obj):
                 # Auto-navigate to Results
                 st.success("Both scans complete! Ready to generate full analysis report.")
                 st.markdown("")
-                if st.button("Generate Report", type="primary", use_container_width=True):
+                if st.button("Generate Report", key="gen_report_second_scan", type="primary", use_container_width=True):
                     st.session_state.navigate_to = 'results'
                     st.session_state._nav_pending = False
                     st.rerun()
@@ -565,7 +565,7 @@ def render_results_tab(tab_obj):
 
                     st.markdown("")
 
-                    if st.button("Generate Report", type="primary", use_container_width=True):
+                    if st.button("Generate Report", key="gen_report_results", type="primary", use_container_width=True):
                         st.session_state._scan_trigger = 'report'
                         st.rerun()
 
