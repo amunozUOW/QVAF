@@ -16,20 +16,29 @@ variations. Centralising it here means:
 HOW LLM RESPONSES WORK:
     The AI is asked to answer quiz questions and format its response like:
         ANSWER: B
-        CONFIDENCE: 85
+        ALTERNATIVE: C
+        ALT_RATIONALE: C is close but focuses on the wrong aspect.
         REASONING: Paris is the capital of France because...
+        DOUBT: Could be wrong if the question refers to a different era.
+        PROBABILITY: 7
 
-    This module extracts those three fields from the free-form text the AI
+    This module extracts those fields from the free-form text the AI
     returns. The AI does not always follow the format perfectly, so fallback
     patterns handle common variations.
 
 USAGE:
-    from parsing_utils import parse_llm_response
+    from parsing_utils import parse_llm_response_full
 
+    result = parse_llm_response_full(llm_output_text)
+    # result['answer']: "B" (uppercase letter) or "?" if unparseable
+    # result['confidence']: 78 (integer 0-100, from 0-9 probability scale)
+    # result['reasoning']: "Paris is the capital..." (string, may be empty)
+    # result['alternative']: "C" (letter), "none", or "" if missing
+    # result['alt_rationale']: "C is close but..." (string, may be empty)
+
+    # Legacy 3-tuple interface (backward compatible):
+    from parsing_utils import parse_llm_response
     answer, confidence, reasoning = parse_llm_response(llm_output_text)
-    # answer: "B" (uppercase letter) or "?" if unparseable
-    # confidence: 85 (integer 0-100, clamped)
-    # reasoning: "Paris is the capital..." (string, may be empty)
 """
 
 import re
@@ -192,6 +201,83 @@ def extract_reasoning(text):
     return ""
 
 
+def extract_alternative(text):
+    """
+    Extract the alternative answer from an LLM response.
+
+    The ALTERNATIVE field names the next most plausible answer option,
+    or "none" if no other option is plausible. This supports the forced
+    alternative enumeration mechanism for confidence calibration.
+
+    Parameters
+    ----------
+    text : str
+        The raw text response from the LLM.
+
+    Returns
+    -------
+    str
+        An uppercase letter (A-H), "none", or "" if field not found.
+
+    Examples
+    --------
+    >>> extract_alternative("ALTERNATIVE: C")
+    'C'
+    >>> extract_alternative("ALTERNATIVE: none")
+    'none'
+    >>> extract_alternative("No alternative here")
+    ''
+    """
+    if not text:
+        return ""
+
+    match = re.search(r'ALTERNATIVE:\s*([A-Ha-h])\b', text, re.IGNORECASE)
+    if match:
+        return match.group(1).upper()
+
+    match = re.search(r'ALTERNATIVE:\s*(none)\b', text, re.IGNORECASE)
+    if match:
+        return "none"
+
+    return ""
+
+
+def extract_alt_rationale(text):
+    """
+    Extract the alternative rationale from an LLM response.
+
+    Captures everything after "ALT_RATIONALE:" up to the next known
+    field marker (REASONING:, DOUBT:, PROBABILITY:, CONFIDENCE:) or
+    end of text.
+
+    Parameters
+    ----------
+    text : str
+        The raw text response from the LLM.
+
+    Returns
+    -------
+    str
+        The rationale text, stripped of whitespace. Empty if not found.
+
+    Examples
+    --------
+    >>> extract_alt_rationale("ALT_RATIONALE: D is close but wrong.")
+    'D is close but wrong.'
+    """
+    if not text:
+        return ""
+
+    match = re.search(
+        r'ALT_RATIONALE:\s*(.+?)(?=\n(?:REASONING|DOUBT|PROBABILITY|CONFIDENCE|ANSWER):|\n\n|\Z)',
+        text, re.DOTALL | re.IGNORECASE
+    )
+    if match:
+        return match.group(1).strip()
+
+    return ""
+
+
 def parse_llm_response(text):
     """
     Parse a complete LLM response into answer, confidence, and reasoning.
@@ -221,3 +307,171 @@ def parse_llm_response(text):
     confidence = extract_confidence(text)
     reasoning = extract_reasoning(text)
     return answer, confidence, reasoning
+
+
+# ============================================
+# MULTI-ANSWER PARSING (for checkbox questions)
+# ============================================
+
+def extract_answers_multi(text):
+    """
+    Extract multiple answer letters from an LLM response.
+
+    For multi-answer MCQ questions where the LLM is asked to select
+    ALL correct options. Tries several patterns:
+    1. "ANSWER: A, C, D" (comma-separated)
+    2. "ANSWER: A and C and D" (natural language)
+    3. "ANSWER: ACD" (no separators)
+    4. Falls back to extract_answer() wrapped in a list
+
+    Returns
+    -------
+    list of str
+        Sorted list of unique uppercase letters, e.g. ["A", "C", "D"].
+        Returns ["?"] if no answer could be found.
+
+    Examples
+    --------
+    >>> extract_answers_multi("ANSWER: A, C, D")
+    ['A', 'C', 'D']
+    >>> extract_answers_multi("ANSWER: B")
+    ['B']
+    """
+    if not text:
+        return ["?"]
+
+    # Pattern 1: "ANSWER: A, C, D" or "ANSWER: A,C,D"
+    match = re.search(r'ANSWER:\s*([A-Ha-h](?:\s*,\s*[A-Ha-h])+)', text, re.IGNORECASE)
+    if match:
+        letters = [l.strip().upper() for l in match.group(1).split(',')]
+        letters = sorted(set(l for l in letters if l in 'ABCDEFGH'))
+        if letters:
+            return letters
+
+    # Pattern 2: "ANSWER: A and C and D"
+    match = re.search(r'ANSWER:\s*([A-Ha-h](?:\s+and\s+[A-Ha-h])+)', text, re.IGNORECASE)
+    if match:
+        letters = [l.strip().upper() for l in re.split(r'\s+and\s+', match.group(1))]
+        letters = sorted(set(l for l in letters if l in 'ABCDEFGH'))
+        if letters:
+            return letters
+
+    # Pattern 3: "ANSWER: ACD" (consecutive letters, no separators, 2+ letters)
+    match = re.search(r'ANSWER:\s*([A-Ha-h]{2,})\b', text, re.IGNORECASE)
+    if match:
+        letters = sorted(set(l.upper() for l in match.group(1) if l.upper() in 'ABCDEFGH'))
+        if letters:
+            return letters
+
+    # Fallback: try single-answer extraction
+    single = extract_answer(text)
+    if single != "?":
+        return [single]
+
+    return ["?"]
+
+
+def validate_multi_answer(answers, valid_options):
+    """
+    Validate that parsed multi-answer letters are valid option keys.
+
+    Filters out any letters not present in valid_options.
+
+    Parameters
+    ----------
+    answers : list of str
+        Parsed answer letters from extract_answers_multi().
+    valid_options : set or dict
+        The valid option keys (e.g. {"A", "B", "C", "D"} or options dict).
+
+    Returns
+    -------
+    list of str
+        Filtered list of valid letters, or ["?"] if none are valid.
+    """
+    if not answers or answers == ["?"]:
+        return ["?"]
+
+    valid_keys = set(valid_options) if isinstance(valid_options, dict) else set(valid_options)
+    filtered = sorted(l for l in answers if l in valid_keys)
+
+    if not filtered:
+        print(f"  ⚠️  All answer letters {answers} are invalid for options {sorted(valid_keys)}", flush=True)
+        return ["?"]
+
+    removed = set(answers) - set(filtered) - {"?"}
+    if removed:
+        print(f"  ⚠️  Filtered invalid answer letters: {sorted(removed)} (valid: {sorted(valid_keys)})", flush=True)
+
+    return filtered
+
+
+def parse_llm_response_multi(text):
+    """
+    Parse a multi-answer LLM response into answers string, confidence, reasoning.
+
+    Like parse_llm_response() but returns a comma-separated answer string
+    for multi-answer questions.
+
+    Returns
+    -------
+    tuple of (str, int, str)
+        - answer: comma-separated letters like "A, C, D" or "?" if unparseable
+        - confidence: integer 0-100
+        - reasoning: string
+    """
+    answers = extract_answers_multi(text)
+    confidence = extract_confidence(text)
+    reasoning = extract_reasoning(text)
+    answer_str = ", ".join(answers)
+    return answer_str, confidence, reasoning
+
+
+def parse_llm_response_full(text):
+    """
+    Parse a complete LLM response into a dict with all fields.
+
+    Returns all fields including the forced alternative enumeration
+    fields (alternative, alt_rationale). Use this when you need
+    the full response data. For backward-compatible 3-tuple output,
+    use parse_llm_response() instead.
+
+    Parameters
+    ----------
+    text : str
+        The raw text response from the LLM.
+
+    Returns
+    -------
+    dict
+        Keys: answer, confidence, reasoning, alternative, alt_rationale
+    """
+    return {
+        'answer': extract_answer(text),
+        'confidence': extract_confidence(text),
+        'reasoning': extract_reasoning(text),
+        'alternative': extract_alternative(text),
+        'alt_rationale': extract_alt_rationale(text),
+    }
+
+
+def parse_llm_response_multi_full(text):
+    """
+    Parse a multi-answer LLM response into a dict with all fields.
+
+    Like parse_llm_response_multi() but returns a dict including
+    alternative and alt_rationale fields.
+
+    Returns
+    -------
+    dict
+        Keys: answer, confidence, reasoning, alternative, alt_rationale
+    """
+    answers = extract_answers_multi(text)
+    return {
+        'answer': ", ".join(answers),
+        'confidence': extract_confidence(text),
+        'reasoning': extract_reasoning(text),
+        'alternative': extract_alternative(text),
+        'alt_rationale': extract_alt_rationale(text),
+    }

@@ -135,29 +135,66 @@ Handles all browser interaction and LLM communication.
 **Key responsibilities:**
 - Connect to Chrome via CDP (port 9222)
 - Navigate Moodle quiz pages
+- Detect question types (single-answer MCQ, multi-answer MCQ, True/False)
 - Extract question text, options, and images
-- Submit questions to Ollama
+- Submit questions to Ollama with type-aware prompts
+- Click radio buttons (single-answer) or checkboxes (multi-answer)
 - Handle multi-sample consistency measurement
+- Validate malformed questions (empty options, duplicates, misconfigurations)
 - Manage RAG retrieval when enabled
+
+**Question type detection:**
+
+```python
+def detect_question_type(css_classes, has_checkboxes, has_radios, prompt_text) -> str:
+    """
+    Detect Moodle question type from CSS classes and input elements.
+
+    Returns one of:
+    - 'multichoice_single'  (radio buttons)
+    - 'multichoice_multi'   (checkboxes)
+    - 'truefalse'           (2 radio buttons)
+    - 'unknown'             (unrecognized — skipped with warning)
+
+    Fallback: unknown types with radio buttons → 'multichoice_single' (best-guess).
+    """
+
+def validate_question(q_type, options, checkbox_buttons, radio_buttons) -> tuple:
+    """
+    Validate and clean up malformed questions before LLM prompting.
+
+    Handles: empty options, duplicate text, single-checkbox multi-answer.
+    Returns: (q_type, options, checkbox_buttons, radio_buttons, warnings)
+    """
+```
 
 **Key classes:**
 
 ```python
 class QuizBrowser:
     """Main browser automation class."""
-    
+
     def connect(self) -> bool
         """Connect to Chrome debug port."""
-    
+
     def scrape_question(self) -> dict
         """Extract current question from page."""
-    
+
     def answer_question(self, question: dict, use_rag: bool) -> dict
         """Submit question to LLM and get response."""
-    
+
     def navigate_next(self) -> bool
         """Move to next question in quiz."""
 ```
+
+**Type-aware prompting:**
+
+`build_prompt()` accepts a `q_type` parameter and adapts the prompt:
+- `multichoice_single` (default): "Answer this multiple choice question." → `ANSWER: X` (single letter)
+- `multichoice_multi`: "Select ALL correct options." → `ANSWER: X, Y, Z` (comma-separated)
+- `truefalse`: "Answer this true/false question." → `ANSWER: A` (True) or `ANSWER: B` (False)
+
+All question types include forced alternative enumeration: the LLM must name a runner-up option (`ALTERNATIVE`) with rationale (`ALT_RATIONALE`) before assigning its probability score (`PROBABILITY` is the last output field).
 
 **Multi-sample mode:**
 
@@ -167,7 +204,7 @@ When `--samples N` is specified (N > 1), each question is submitted to the LLM N
 def answer_question_multi_sample(self, question: dict, n: int) -> dict:
     """
     Run question through LLM n times.
-    
+
     Returns:
         {
             'answer': str,           # Plurality vote winner
@@ -177,6 +214,8 @@ def answer_question_multi_sample(self, question: dict, n: int) -> dict:
         }
     """
 ```
+
+For multi-answer questions, consistency compares full answer sets (e.g., "A, C, D" treated as a single unit).
 
 **RAG integration:**
 
@@ -372,6 +411,7 @@ def merge_attempts(no_rag_path: str, with_rag_path: str,
     {
       "number": 1,
       "question": "What is the primary purpose of...",
+      "type": "multichoice_single",
       "options": {
         "A": "Option text A",
         "B": "Option text B",
@@ -382,14 +422,38 @@ def merge_attempts(no_rag_path: str, with_rag_path: str,
         "answer": "B",
         "confidence": 85,
         "reasoning": "Based on the definition...",
+        "alternative": "C",
+        "alt_rationale": "C is related but focuses on transformed resources.",
         "consistency": "9/10"
       },
       "correct_answer": "B",
+      "is_correct": true
+    },
+    {
+      "number": 2,
+      "question": "Select all that apply: Which of the following are...",
+      "type": "multichoice_multi",
+      "options": {
+        "A": "Option A",
+        "B": "Option B",
+        "C": "Option C",
+        "D": "Option D"
+      },
+      "response": {
+        "answer": "A, C, D",
+        "confidence": 78,
+        "reasoning": "Options A, C and D are correct because...",
+        "alternative": "B",
+        "alt_rationale": "B was nearly included but is less directly relevant."
+      },
+      "correct_answer": "A, C, D",
       "is_correct": true
     }
   ]
 }
 ```
+
+**Question type values:** `multichoice_single`, `multichoice_multi`, `truefalse`
 
 ### Merged Results JSON
 
@@ -412,6 +476,7 @@ def merge_attempts(no_rag_path: str, with_rag_path: str,
       "number": 1,
       "question": "...",
       "options": {...},
+      "format_type": "multichoice_single",
       "correct_answer": "B",
       "response_without_rag": {
         "answer": "C",
@@ -588,16 +653,13 @@ python -m pytest --cov=. --cov-report=html
 
 ```
 tests/
-├── unit/
-│   ├── test_reform_agent.py
-│   ├── test_analysis_agent.py
-│   └── test_merge_attempts.py
-├── integration/
-│   ├── test_ollama_connection.py
-│   └── test_browser_automation.py
-└── fixtures/
-    ├── sample_quiz.json
-    └── sample_merged.json
+├── test_response_parsing.py      # LLM response parsing (single + multi-answer)
+├── test_correctness.py           # Correctness checking (single + multi-answer)
+├── test_option_parsing.py        # Option label stripping
+├── test_question_matching.py     # Question text matching for merge
+├── test_stem_classifier.py       # Cognitive demand classification
+├── test_type_detection.py        # Moodle question type detection
+└── test_malformed_questions.py   # Malformed question validation
 ```
 
 ---
@@ -653,6 +715,6 @@ Quiz questions may be sensitive. QVAF:
 
 ---
 
-*Document version: 1.0*  
-*Framework version: QVAF 2.0*  
-*Last updated: February 2026*
+*Document version: 1.1*
+*Framework version: QVAF 2.1*
+*Last updated: March 2026*

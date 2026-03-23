@@ -35,7 +35,12 @@ import os
 # This is needed because tests/ is a subfolder.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from parsing_utils import extract_answer, extract_confidence, extract_reasoning, parse_llm_response
+from parsing_utils import (
+    extract_answer, extract_confidence, extract_reasoning, parse_llm_response,
+    extract_answers_multi, validate_multi_answer, parse_llm_response_multi,
+    extract_alternative, extract_alt_rationale,
+    parse_llm_response_full, parse_llm_response_multi_full,
+)
 
 
 # ============================================
@@ -311,6 +316,180 @@ class TestExtractReasoning:
 
 
 # ============================================
+# ALTERNATIVE EXTRACTION TESTS
+# ============================================
+# These test extract_alternative() which pulls the runner-up answer
+# from the ALTERNATIVE: field in the LLM response.
+
+class TestExtractAlternative:
+    """Tests for extracting the alternative answer from LLM responses."""
+
+    def test_standard_letter(self):
+        """Standard format: ALTERNATIVE: C"""
+        assert extract_alternative("ALTERNATIVE: C") == "C"
+
+    def test_lowercase_letter(self):
+        """Lowercase letter is uppercased."""
+        assert extract_alternative("ALTERNATIVE: c") == "C"
+
+    def test_none_value(self):
+        """Model reports no plausible alternative."""
+        assert extract_alternative("ALTERNATIVE: none") == "none"
+
+    def test_none_uppercase(self):
+        """NONE in various cases."""
+        assert extract_alternative("ALTERNATIVE: None") == "none"
+        assert extract_alternative("ALTERNATIVE: NONE") == "none"
+
+    def test_no_space_after_colon(self):
+        """No space: ALTERNATIVE:C"""
+        assert extract_alternative("ALTERNATIVE:C") == "C"
+
+    def test_missing_field(self):
+        """No ALTERNATIVE marker returns empty string."""
+        assert extract_alternative("ANSWER: B\nPROBABILITY: 7") == ""
+
+    def test_empty_string(self):
+        """Empty input returns empty string."""
+        assert extract_alternative("") == ""
+
+    def test_none_input(self):
+        """None input returns empty string."""
+        assert extract_alternative(None) == ""
+
+    def test_in_full_response(self):
+        """Extracted correctly from a complete response."""
+        text = "ANSWER: B\nALTERNATIVE: D\nALT_RATIONALE: D is close but...\nREASONING: B is correct.\nDOUBT: Could be D.\nPROBABILITY: 7"
+        assert extract_alternative(text) == "D"
+
+    def test_extended_options(self):
+        """Supports letters up to H."""
+        assert extract_alternative("ALTERNATIVE: F") == "F"
+        assert extract_alternative("ALTERNATIVE: H") == "H"
+
+    def test_with_trailing_text(self):
+        """Letter with trailing text (model adds extra words)."""
+        assert extract_alternative("ALTERNATIVE: C (close second)") == "C"
+
+
+# ============================================
+# ALT_RATIONALE EXTRACTION TESTS
+# ============================================
+
+class TestExtractAltRationale:
+    """Tests for extracting the alternative rationale from LLM responses."""
+
+    def test_standard_format(self):
+        """Standard single-line rationale."""
+        text = "ALT_RATIONALE: D is close but focuses on the wrong aspect."
+        assert extract_alt_rationale(text) == "D is close but focuses on the wrong aspect."
+
+    def test_no_space_after_colon(self):
+        """No space: ALT_RATIONALE:reason"""
+        text = "ALT_RATIONALE:D could apply but is less specific."
+        assert extract_alt_rationale(text) == "D could apply but is less specific."
+
+    def test_missing_field(self):
+        """No ALT_RATIONALE marker returns empty string."""
+        assert extract_alt_rationale("ANSWER: B\nPROBABILITY: 7") == ""
+
+    def test_empty_string(self):
+        """Empty input returns empty string."""
+        assert extract_alt_rationale("") == ""
+
+    def test_none_input(self):
+        """None input returns empty string."""
+        assert extract_alt_rationale(None) == ""
+
+    def test_stops_at_next_field(self):
+        """Rationale stops at the next field marker (REASONING:)."""
+        text = "ALT_RATIONALE: D is plausible but weaker.\nREASONING: B is the best fit."
+        assert extract_alt_rationale(text) == "D is plausible but weaker."
+
+    def test_in_full_response(self):
+        """Extracted correctly from a complete response."""
+        text = "ANSWER: B\nALTERNATIVE: D\nALT_RATIONALE: D relates to supply chain not operations.\nREASONING: B is correct because...\nDOUBT: Could be D.\nPROBABILITY: 7"
+        assert extract_alt_rationale(text) == "D relates to supply chain not operations."
+
+
+# ============================================
+# FULL RESPONSE PARSING TESTS (dict format)
+# ============================================
+
+class TestParseLlmResponseFull:
+    """Tests for parse_llm_response_full() which returns all fields as a dict."""
+
+    def test_complete_response(self):
+        """All six fields parsed correctly."""
+        text = "ANSWER: B\nALTERNATIVE: D\nALT_RATIONALE: D is about supply chain.\nDOUBT: Could be D if scope is broader.\nPROBABILITY: 7\nREASONING: B matches operations definition."
+        result = parse_llm_response_full(text)
+        assert result['answer'] == "B"
+        assert result['confidence'] == 78
+        assert result['reasoning'] == "B matches operations definition."
+        assert result['alternative'] == "D"
+        assert result['alt_rationale'] == "D is about supply chain."
+
+    def test_alternative_none(self):
+        """Alternative is 'none' for unambiguous questions."""
+        text = "ANSWER: B\nALTERNATIVE: none\nALT_RATIONALE: No other option fits.\nREASONING: Clearly B.\nDOUBT: None.\nPROBABILITY: 9"
+        result = parse_llm_response_full(text)
+        assert result['alternative'] == "none"
+        assert result['alt_rationale'] == "No other option fits."
+
+    def test_missing_alternative_fields(self):
+        """Graceful fallback when alternative fields are missing (legacy response)."""
+        text = "ANSWER: B\nPROBABILITY: 7\nREASONING: Because.\nDOUBT: Maybe not."
+        result = parse_llm_response_full(text)
+        assert result['answer'] == "B"
+        assert result['confidence'] == 78
+        assert result['alternative'] == ""
+        assert result['alt_rationale'] == ""
+
+    def test_garbage_input(self):
+        """Unparseable response returns safe defaults."""
+        result = parse_llm_response_full("asdfghjkl")
+        assert result['answer'] == "?"
+        assert result['confidence'] == 0
+        assert result['reasoning'] == ""
+        assert result['alternative'] == ""
+        assert result['alt_rationale'] == ""
+
+    def test_none_input(self):
+        """None input returns safe defaults."""
+        result = parse_llm_response_full(None)
+        assert result['answer'] == "?"
+        assert result['confidence'] == 0
+
+    def test_backward_compat_tuple_still_works(self):
+        """Existing parse_llm_response() 3-tuple is unaffected."""
+        text = "ANSWER: B\nALTERNATIVE: D\nALT_RATIONALE: Close.\nDOUBT: Maybe.\nPROBABILITY: 7\nREASONING: Correct."
+        answer, confidence, reasoning = parse_llm_response(text)
+        assert answer == "B"
+        assert confidence == 78
+        assert reasoning == "Correct."
+
+
+class TestParseLlmResponseMultiFull:
+    """Tests for parse_llm_response_multi_full() dict format."""
+
+    def test_complete_multi_response(self):
+        """Multi-answer response with all fields."""
+        text = "ANSWER: A, C\nALTERNATIVE: D\nALT_RATIONALE: D almost included.\nREASONING: A and C are both correct.\nDOUBT: Maybe D too.\nPROBABILITY: 6"
+        result = parse_llm_response_multi_full(text)
+        assert result['answer'] == "A, C"
+        assert result['confidence'] == 67
+        assert result['alternative'] == "D"
+
+    def test_missing_alternative_fields(self):
+        """Graceful fallback for multi-answer legacy response."""
+        text = "ANSWER: A, C\nPROBABILITY: 7\nREASONING: Both correct."
+        result = parse_llm_response_multi_full(text)
+        assert result['answer'] == "A, C"
+        assert result['alternative'] == ""
+        assert result['alt_rationale'] == ""
+
+
+# ============================================
 # FULL RESPONSE PARSING TESTS
 # ============================================
 # These test parse_llm_response() which combines all three extractions.
@@ -409,3 +588,153 @@ DOUBT: Could be wrong if the question refers to a historical period before Paris
         assert answer == "C"
         assert confidence == 44  # 4 on 0-9 scale → 44%
         assert "Not sure" in reasoning
+
+
+# ============================================
+# MULTI-ANSWER EXTRACTION TESTS
+# ============================================
+# These test extract_answers_multi() which parses comma-separated,
+# "and"-separated, or concatenated answer letters for multi-answer MCQs.
+
+class TestExtractAnswersMulti:
+    """Tests for extracting multiple answer letters from LLM responses."""
+
+    def test_comma_separated(self):
+        """Standard comma-separated format: ANSWER: A, C, D"""
+        assert extract_answers_multi("ANSWER: A, C, D") == ["A", "C", "D"]
+
+    def test_comma_no_spaces(self):
+        """Comma-separated without spaces: ANSWER: A,C,D"""
+        assert extract_answers_multi("ANSWER: A,C,D") == ["A", "C", "D"]
+
+    def test_single_letter(self):
+        """Single letter falls back to extract_answer: ANSWER: B"""
+        assert extract_answers_multi("ANSWER: B") == ["B"]
+
+    def test_with_and(self):
+        """Natural language 'and' separator: ANSWER: A and C"""
+        assert extract_answers_multi("ANSWER: A and C") == ["A", "C"]
+
+    def test_multiple_and(self):
+        """Multiple 'and' separators: ANSWER: A and C and D"""
+        assert extract_answers_multi("ANSWER: A and C and D") == ["A", "C", "D"]
+
+    def test_no_separators(self):
+        """Concatenated letters: ANSWER: ACD"""
+        assert extract_answers_multi("ANSWER: ACD") == ["A", "C", "D"]
+
+    def test_sorted_output(self):
+        """Output is always sorted regardless of input order."""
+        assert extract_answers_multi("ANSWER: D, A, C") == ["A", "C", "D"]
+
+    def test_duplicates_removed(self):
+        """Duplicate letters are removed."""
+        assert extract_answers_multi("ANSWER: A, A, C") == ["A", "C"]
+
+    def test_unknown(self):
+        """No parseable answer returns ['?']."""
+        assert extract_answers_multi("no answer here") == ["?"]
+
+    def test_empty_string(self):
+        """Empty input returns ['?']."""
+        assert extract_answers_multi("") == ["?"]
+
+    def test_none_input(self):
+        """None input returns ['?']."""
+        assert extract_answers_multi(None) == ["?"]
+
+    def test_lowercase_letters(self):
+        """Lowercase letters are uppercased."""
+        assert extract_answers_multi("ANSWER: a, c, d") == ["A", "C", "D"]
+
+    def test_in_long_response(self):
+        """Multi-answer extracted from a full LLM response."""
+        text = """Let me analyze each option...
+
+A: [KEEP] - Correct because...
+B: [ELIMINATE] - Wrong because...
+C: [KEEP] - Also correct...
+D: [ELIMINATE] - Incorrect...
+
+ANSWER: A, C
+PROBABILITY: 7
+REASONING: Both A and C are correct statements."""
+        assert extract_answers_multi(text) == ["A", "C"]
+
+    def test_extended_options(self):
+        """Supports up to H for questions with many options."""
+        assert extract_answers_multi("ANSWER: B, F, H") == ["B", "F", "H"]
+
+
+# ============================================
+# MULTI-ANSWER VALIDATION TESTS
+# ============================================
+# These test validate_multi_answer() which filters parsed answers
+# against the actual valid option keys.
+
+class TestValidateMultiAnswer:
+    """Tests for validating multi-answer letters against valid options."""
+
+    def test_all_valid(self):
+        """All letters are valid options — no filtering."""
+        result = validate_multi_answer(["A", "C"], {"A", "B", "C", "D"})
+        assert result == ["A", "C"]
+
+    def test_filter_invalid_letters(self):
+        """Invalid letters (not in options) are filtered out."""
+        result = validate_multi_answer(["A", "C", "F"], {"A", "B", "C", "D"})
+        assert result == ["A", "C"]
+
+    def test_all_invalid(self):
+        """All letters invalid returns ['?']."""
+        result = validate_multi_answer(["X", "Z"], {"A", "B", "C", "D"})
+        assert result == ["?"]
+
+    def test_empty_answers(self):
+        """Empty answer list returns ['?']."""
+        result = validate_multi_answer([], {"A", "B"})
+        assert result == ["?"]
+
+    def test_question_mark_input(self):
+        """['?'] input passes through as ['?']."""
+        result = validate_multi_answer(["?"], {"A", "B", "C", "D"})
+        assert result == ["?"]
+
+    def test_dict_as_valid_options(self):
+        """Accepts a dict (options dict) as valid_options."""
+        result = validate_multi_answer(["A", "C"], {"A": "True", "B": "False", "C": "Maybe"})
+        assert result == ["A", "C"]
+
+    def test_single_valid_letter(self):
+        """Single valid letter among invalids."""
+        result = validate_multi_answer(["A", "X", "Y"], {"A", "B"})
+        assert result == ["A"]
+
+
+# ============================================
+# FULL MULTI-ANSWER PARSE TESTS
+# ============================================
+
+class TestParseLlmResponseMulti:
+    """Tests for parse_llm_response_multi() combined parsing."""
+
+    def test_standard_multi_answer(self):
+        """Standard multi-answer response parsed correctly."""
+        text = "ANSWER: A, C, D\nPROBABILITY: 7\nREASONING: Options A, C and D are all correct."
+        answer, confidence, reasoning = parse_llm_response_multi(text)
+        assert answer == "A, C, D"
+        assert confidence == 78
+        assert "correct" in reasoning
+
+    def test_single_answer_still_works(self):
+        """Single letter response still works through multi parser."""
+        text = "ANSWER: B\nPROBABILITY: 8\nREASONING: Only B is correct."
+        answer, confidence, reasoning = parse_llm_response_multi(text)
+        assert answer == "B"
+        assert confidence == 89
+
+    def test_no_answer_returns_question_mark(self):
+        """No parseable answer returns '?'."""
+        answer, confidence, reasoning = parse_llm_response_multi("gibberish")
+        assert answer == "?"
+        assert confidence == 0

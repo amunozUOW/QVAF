@@ -24,13 +24,25 @@ Educators expect local-first, privacy-preserving behaviour: do not add network t
 
 ## 1) Critical Invariants (do NOT change these silently)
 - Progress tokens emitted by `quiz_browser_enhanced.py` that `App.py` parses: lines containing the literal marker `[PROGRESS]` with phrases such as `Question`, `AI thinking`, `Running N samples`, `Answer:`, `Page complete`. If you change these strings, update `App.py` parsing logic accordingly.
-- LLM response contract (must be parseable by `parse_llm_response()`):
+- LLM response contract (must be parseable by `parse_llm_response_full()` or `parse_llm_response_multi_full()`):
 
+  Single-answer (multichoice_single, truefalse):
   ANSWER: X
-  CONFIDENCE: N
+  ALTERNATIVE: Y
+  ALT_RATIONALE: ...
   REASONING: ...
+  DOUBT: ...
+  PROBABILITY: N
 
-  Where X is letter A–E and N is integer 0–100. Keep this exact header format or update both the prompt template and `parse_llm_response()`.
+  Multi-answer (multichoice_multi):
+  ANSWER: X, Y, Z
+  ALTERNATIVE: Y
+  ALT_RATIONALE: ...
+  REASONING: ...
+  DOUBT: ...
+  PROBABILITY: N
+
+  Where X is letter A–H (single) or comma-separated letters (multi), Y is the next most plausible option letter or "none", and N is a digit 0–9 (converted to 0–100%). PROBABILITY is intentionally last to enforce reasoning-before-number ordering. The `_full()` parsers return dicts; the legacy 3-tuple parsers (`parse_llm_response()`, `parse_llm_response_multi()`) remain for backward compatibility. All live in `parsing_utils.py`.
 - Output filename pattern (scanner): `quiz_attempt_{mode}_{YYYYmmdd_HHMMSS}.json` and `mode` is `no_rag` or `with_rag`. UI looks for `_no_rag_` / `_with_rag_` in filenames.
 - RAG collection naming: `get_rag_collection_name(user_name)` prefixes with `RAG_COLLECTION_PREFIX` from `config.py` and sanitises non-alphanumeric chars to `_`. Do not change prefix without updating UI and docs.
 - Chrome CDP port: `CHROME_DEBUG_PORT` default 9222 (in `config.py`). `quiz_browser_enhanced.py` connects to `http://localhost:9222` — keep consistent.
@@ -94,15 +106,15 @@ Important mapping notes when adapting non-Ollama providers:
 - Output file naming: `quiz_attempt_{mode}_{YYYYmmdd_HHMMSS}.json` saved under `output/raw_attempts/`. UI looks for new files matching `_no_rag_` or `_with_rag_`.
 - RAG collections: user-visible names converted to internal names via `get_rag_collection_name()` (prefix `rag_`; non-alphanumeric replaced with `_`).
 - UI progress parsing: `App.py` expects scanner stdout to emit lines containing `[PROGRESS]` with short human-readable tokens (e.g., `Question`, `AI thinking`, `Answer:`). Avoid changing these tokens when editing `quiz_browser_enhanced.py` unless updating the UI parsing logic as well.
-- LLM response format: prompts are constructed in `quiz_browser_enhanced.build_prompt()` and the code expects answers in this exact format:
+- LLM response format: prompts are constructed in `quiz_browser_enhanced.build_prompt(q_type=...)` and the code expects answers in type-specific formats:
+  - **Single-answer** (`multichoice_single`, `truefalse`): `ANSWER: X` (one letter) → parsed by `parse_llm_response_full()`
+  - **Multi-answer** (`multichoice_multi`): `ANSWER: X, Y, Z` (comma-separated) → parsed by `parse_llm_response_multi_full()`
+  - Both formats include `ALTERNATIVE: Y` (runner-up letter or "none"), `ALT_RATIONALE: ...`, `REASONING: ...`, `DOUBT: ...`, and `PROBABILITY: N` (0–9 scale, intentionally last)
+  - Multi-answer responses are validated by `validate_multi_answer()` which filters invalid letters against the actual option keys
+  - `build_prompt()` accepts `q_type` parameter and adapts instructions accordingly
+  - Legacy 3-tuple parsers (`parse_llm_response()`, `parse_llm_response_multi()`) still work for callers that only need answer/confidence/reasoning
 
-  ```text
-  ANSWER: X
-  CONFIDENCE: N
-  REASONING: ...
-  ```
-
-  `parse_llm_response()` extracts `ANSWER`, `CONFIDENCE`, and `REASONING`. Keep that format stable or update both parsing and UI.
+  Keep these formats stable or update prompts, parsers (`parsing_utils.py`), and UI simultaneously.
 
 **What to change (and how)**
 - To add a new CLI flag for scanning, update `quiz_browser_enhanced.py` (argument parsing at bottom) and mirror any progress/output tokens used by `App.py`.
@@ -122,8 +134,21 @@ Important mapping notes when adapting non-Ollama providers:
 ---
 
 ## 5) Prompt and parsing contract (where to edit carefully)
-- Prompt builder: `quiz_browser_enhanced.build_prompt()` composes `QUESTION`, `OPTIONS`, and optional context blocks (`COURSE MATERIALS`, `IMAGE CONTENT`, `LINKED CONTENT`). When editing the prompt, preserve the ending instructions that require EXACT output formatting.
-- Parser: `parse_llm_response(text)` extracts `ANSWER`, `CONFIDENCE`, `REASONING`. If you change the expected format, update both the prompt and parser simultaneously and add a unit test (see tests below).
+- Prompt builder: `quiz_browser_enhanced.build_prompt(q_type=...)` composes `QUESTION`, `OPTIONS`, and optional context blocks (`COURSE MATERIALS`, `IMAGE CONTENT`, `LINKED CONTENT`). The prompt adapts based on `q_type`:
+  - `multichoice_single` (default): asks for single best answer
+  - `multichoice_multi`: asks to select ALL correct options, expects comma-separated letters
+  - `truefalse`: simplified True/False prompt
+  The prompt includes forced alternative enumeration (ALTERNATIVE + ALT_RATIONALE fields) and places PROBABILITY last to enforce reasoning-before-number ordering.
+  When editing the prompt, preserve the ending instructions that require EXACT output formatting.
+- Parsers (all in `parsing_utils.py`):
+  - `parse_llm_response_full(text)` returns dict with `answer`, `confidence`, `reasoning`, `alternative`, `alt_rationale` — primary parser for single-answer and true/false
+  - `parse_llm_response_multi_full(text)` returns dict with same keys — primary parser for multi-answer
+  - `parse_llm_response(text)` legacy 3-tuple (`answer`, `confidence`, `reasoning`) — backward compat
+  - `parse_llm_response_multi(text)` legacy 3-tuple — backward compat
+  - `validate_multi_answer(answers, valid_options)` filters invalid letters against actual option keys
+  - `extract_alternative(text)` extracts ALTERNATIVE field (letter, "none", or "")
+  - `extract_alt_rationale(text)` extracts ALT_RATIONALE field
+  If you change the expected format, update both the prompt and parser simultaneously and add a unit test (see `tests/test_response_parsing.py`).
 
 ---
 

@@ -25,7 +25,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 from collections import Counter
-from parsing_utils import parse_llm_response
+from parsing_utils import (
+    parse_llm_response, parse_llm_response_multi,
+    parse_llm_response_full, parse_llm_response_multi_full,
+    extract_answers_multi, validate_multi_answer,
+)
 
 try:
     from playwright.sync_api import sync_playwright
@@ -380,7 +384,7 @@ def process_question_links(page, q_elem, base_url, debug=False):
 # LLM ANSWERING
 # ============================================
 
-def build_prompt(question, options, rag_context="", image_context="", link_context=""):
+def build_prompt(question, options, rag_context="", image_context="", link_context="", q_type="multichoice_single"):
     options_text = "\n".join([f"{k}. {v}" for k, v in options.items()])
 
     context_parts = []
@@ -397,7 +401,31 @@ def build_prompt(question, options, rag_context="", image_context="", link_conte
     option_letters = sorted(options.keys())
     letters_str = ", ".join(option_letters) if option_letters else "A, B, C, D, or E"
 
-    return f"""Answer this multiple choice question.
+    # Type-specific prompt sections
+    if q_type == 'multichoice_multi':
+        instruction = "Answer this multiple choice question. Select ALL correct options — there may be more than one correct answer."
+        answer_format = "ANSWER: X, Y, Z"
+        answer_description = f"where X, Y, Z are one or more of the options ({letters_str}) separated by commas. Example: ANSWER: A, C, D"
+        selection_guidance = "Select ALL options that are correct. Do not select options that are incorrect."
+    elif q_type == 'truefalse':
+        instruction = "Answer this true/false question."
+        answer_format = "ANSWER: X"
+        answer_description = f"where X is one of the options ({letters_str})"
+        selection_guidance = "State your answer as a single choice."
+    else:
+        # multichoice_single (default)
+        instruction = "Answer this multiple choice question."
+        answer_format = "ANSWER: X"
+        answer_description = f"where X is one of the options ({letters_str})"
+        selection_guidance = "State your answer as a single choice."
+
+    # Type-specific alternative guidance
+    if q_type == 'multichoice_multi':
+        alt_guidance = "After selecting your answers, identify which other option you were least sure about including or excluding. State it as ALTERNATIVE: [letter] or ALTERNATIVE: none if your selections are clearly correct. Briefly explain why you included or excluded it."
+    else:
+        alt_guidance = "After selecting your answer, identify which other option was the strongest runner-up. State it as ALTERNATIVE: [letter] or ALTERNATIVE: none if no other option is plausible. Briefly explain why you rejected it."
+
+    return f"""{instruction}
 
 QUESTION: {question}
 
@@ -406,15 +434,21 @@ OPTIONS:
 
 {context_block}
 
-First, evaluate each option briefly. Then state your answer as a single choice. Before rating your probability, consider what is the strongest argument AGAINST your chosen answer. Then rate the probability that your answer is correct and explain your reasoning.
+First, evaluate each option briefly. {selection_guidance}
+
+{alt_guidance}
+
+Then, considering the strength of that alternative, rate the probability your primary answer is correct.
 
 Format your response EXACTLY like this:
-ANSWER: X
-PROBABILITY: N
+{answer_format}
+ALTERNATIVE: Y
+ALT_RATIONALE: Why Y was considered and rejected
 REASONING: Your explanation here
 DOUBT: What could make your answer wrong
+PROBABILITY: N
 
-where X is one of the options ({letters_str}) and N is a single digit 0-9:
+{answer_description}, Y is the next most plausible option letter (or "none"), and N is a single digit 0-9:
   0 = guessing randomly
   1 = very unlikely correct
   2 = unlikely, major problems with reasoning
@@ -504,32 +538,194 @@ def call_llm_multi_sample(prompt, model, num_samples):
     }
 
 
-def answer_question(question, options, use_rag, rag_collection, image_context, link_context, model, num_samples=1):
+def answer_question(question, options, use_rag, rag_collection, image_context, link_context, model, num_samples=1, q_type="multichoice_single"):
     """Answer a question with optional RAG and multi-sample"""
-    
+
     rag_context = ""
     if use_rag and rag_collection:
         rag_context = query_rag(rag_collection, question)
-    
-    prompt = build_prompt(question, options, rag_context, image_context, link_context)
-    
+
+    prompt = build_prompt(question, options, rag_context, image_context, link_context, q_type=q_type)
+    is_multi = (q_type == 'multichoice_multi')
+
     if num_samples == 1:
         text = call_llm_single(prompt, model)
-        answer, confidence, reasoning = parse_llm_response(text)
+        if is_multi:
+            parsed = parse_llm_response_multi_full(text)
+            # Validate against actual options
+            answer_letters = validate_multi_answer(
+                [l.strip() for l in parsed['answer'].split(',')], options
+            )
+            parsed['answer'] = ", ".join(answer_letters)
+        else:
+            parsed = parse_llm_response_full(text)
         return {
-            'answer': answer,
-            'confidence': confidence,
-            'reasoning': reasoning,
+            'answer': parsed['answer'],
+            'confidence': parsed['confidence'],
+            'reasoning': parsed['reasoning'],
+            'alternative': parsed['alternative'],
+            'alt_rationale': parsed['alt_rationale'],
             'consistency': '1/1',
             'consistency_pct': 100,
             'raw_response': text,
         }
     else:
-        result = call_llm_multi_sample(prompt, model, num_samples)
-        result['consistency_pct'] = result['consistency_pct']
-        # Backwards compatibility: use consistency as confidence proxy
-        result['confidence'] = result['consistency_pct']
-        return result
+        if is_multi:
+            # Multi-answer multi-sample: run multiple times, find most common answer SET
+            answers = []
+            confidences = []
+            best_reasoning = ""
+            for i in range(num_samples):
+                text = call_llm_single(prompt, model)
+                ans_str, conf, reasoning = parse_llm_response_multi(text)
+                ans_letters = validate_multi_answer(
+                    [l.strip() for l in ans_str.split(',')], options
+                )
+                # Normalize to sorted comma string for consistent comparison
+                normalized = ", ".join(ans_letters)
+                answers.append(normalized)
+                confidences.append(conf)
+                if not best_reasoning and reasoning:
+                    best_reasoning = reasoning
+            counter = Counter(answers)
+            most_common_answer, most_common_count = counter.most_common(1)[0]
+            avg_confidence = sum(confidences) / len(confidences)
+            consistency_pct = round(most_common_count / num_samples * 100, 1)
+            return {
+                'answer': most_common_answer,
+                'confidence': consistency_pct,
+                'reasoning': best_reasoning,
+                'consistency': f"{most_common_count}/{num_samples}",
+                'consistency_pct': consistency_pct,
+                'consistency_count': most_common_count,
+                'answer_distribution': dict(counter),
+                'all_answers': answers,
+            }
+        else:
+            result = call_llm_multi_sample(prompt, model, num_samples)
+            result['consistency_pct'] = result['consistency_pct']
+            # Backwards compatibility: use consistency as confidence proxy
+            result['confidence'] = result['consistency_pct']
+            return result
+
+
+# ============================================
+# QUESTION TYPE DETECTION & VALIDATION
+# ============================================
+
+def detect_question_type(css_classes, has_checkboxes=False, has_radios=False, prompt_text=""):
+    """
+    Detect the Moodle question type from CSS classes and input elements.
+
+    Parameters
+    ----------
+    css_classes : str
+        The CSS class attribute from the div.que element.
+    has_checkboxes : bool
+        Whether the answer container has checkbox inputs.
+    has_radios : bool
+        Whether the answer container has radio button inputs.
+    prompt_text : str
+        Text from the .prompt element (e.g. "Select one or more:").
+
+    Returns
+    -------
+    str
+        One of: 'truefalse', 'multichoice_multi', 'multichoice_single', 'unknown'
+    """
+    classes = css_classes.lower() if css_classes else ''
+
+    # True/False is unambiguous
+    if 'truefalse' in classes:
+        return 'truefalse'
+
+    # Multichoice: disambiguate single vs multi by input type
+    if 'multichoice' in classes:
+        if has_checkboxes:
+            return 'multichoice_multi'
+        return 'multichoice_single'
+
+    # Secondary signal: prompt text can indicate multi-answer
+    select_multi = 'select one or more' in prompt_text.lower() if prompt_text else False
+    if select_multi and has_checkboxes:
+        return 'multichoice_multi'
+
+    # Best-guess fallback: unknown class but has radio buttons → treat as single MCQ
+    if has_radios:
+        return 'multichoice_single'
+
+    return 'unknown'
+
+
+def validate_question(q_type, options, checkbox_buttons=None, radio_buttons=None):
+    """
+    Validate and clean up a scraped question before sending to the LLM.
+
+    Handles malformed questions from instructor errors:
+    - Empty/whitespace-only options are removed
+    - Duplicate option text is deduped (keeps first occurrence)
+    - Multi-answer with only 1 checkbox is downgraded to single-answer
+
+    Parameters
+    ----------
+    q_type : str
+        Detected question type.
+    options : dict
+        {letter: text} option mapping.
+    checkbox_buttons : dict or None
+        {letter: element} checkbox mapping.
+    radio_buttons : dict or None
+        {letter: element} radio button mapping.
+
+    Returns
+    -------
+    tuple of (str, dict, dict, dict, list)
+        (q_type, options, checkbox_buttons, radio_buttons, warnings)
+    """
+    if checkbox_buttons is None:
+        checkbox_buttons = {}
+    if radio_buttons is None:
+        radio_buttons = {}
+
+    warnings = []
+
+    # 1. Remove empty/whitespace-only options
+    empty_keys = [k for k, v in options.items() if not v or not v.strip()]
+    if empty_keys:
+        warnings.append(f"Removed empty options: {empty_keys}")
+        for k in empty_keys:
+            del options[k]
+            checkbox_buttons.pop(k, None)
+            radio_buttons.pop(k, None)
+
+    # 2. Remove duplicate option text (keep first occurrence)
+    seen_texts = {}
+    dup_keys = []
+    for k, v in options.items():
+        normalized = v.strip().lower()
+        if normalized in seen_texts:
+            dup_keys.append(k)
+            warnings.append(f"Duplicate option '{v}' at {k} (same as {seen_texts[normalized]})")
+        else:
+            seen_texts[normalized] = k
+    for k in dup_keys:
+        del options[k]
+        checkbox_buttons.pop(k, None)
+        radio_buttons.pop(k, None)
+
+    # 3. Multi-answer with only 1 checkbox → downgrade to single-answer
+    if q_type == 'multichoice_multi' and len(checkbox_buttons) <= 1:
+        warnings.append("Multi-answer question has only 1 option — treating as single-answer")
+        q_type = 'multichoice_single'
+        # Move the single checkbox to radio_buttons for consistent clicking
+        if checkbox_buttons:
+            radio_buttons.update(checkbox_buttons)
+            checkbox_buttons = {}
+
+    for w in warnings:
+        print(f"  ⚠️  {w}", flush=True)
+
+    return q_type, options, checkbox_buttons, radio_buttons, warnings
 
 
 # ============================================
@@ -563,25 +759,43 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
                     q_text = formulation.inner_text().strip()
             
             classes = q_elem.get_attribute('class') or ''
-            q_type = 'multichoice' if 'multichoice' in classes else 'unknown'
-            
+
             options = {}
             radio_buttons = {}
-            
+            checkbox_buttons = {}
+
             answer_container = q_elem.query_selector('.answer')
+
+            # Probe for input types to help detection
+            has_checkboxes = False
+            has_radios = False
+            prompt_text = ""
+            if answer_container:
+                has_checkboxes = answer_container.query_selector('input[type="checkbox"]') is not None
+                has_radios = answer_container.query_selector('input[type="radio"]') is not None
+            prompt_elem = q_elem.query_selector('.ablock .prompt')
+            if prompt_elem:
+                prompt_text = prompt_elem.inner_text().strip()
+
+            q_type = detect_question_type(classes, has_checkboxes, has_radios, prompt_text)
+
+            if q_type == 'unknown':
+                print(f"  ⚠️  Skipping unrecognized question type (classes: {classes})", flush=True)
+
             if answer_container:
                 answer_items = answer_container.query_selector_all('div[class*="r0"], div[class*="r1"]')
                 if not answer_items:
                     answer_items = answer_container.query_selector_all('div.flex-fill')
                 if not answer_items:
-                    answer_items = answer_container.query_selector_all('div:has(input[type="radio"])')
-                
+                    answer_items = answer_container.query_selector_all('div:has(input[type="radio"]), div:has(input[type="checkbox"])')
+
                 letter_index = 0
                 seen_texts = set()
-                
+
                 for item in answer_items:
-                    radio = item.query_selector('input[type="radio"]')
-                    if radio:
+                    # Look for checkbox first, then radio
+                    input_elem = item.query_selector('input[type="checkbox"]') or item.query_selector('input[type="radio"]')
+                    if input_elem:
                         label = item.query_selector('label')
                         text = label.inner_text().strip() if label else item.inner_text().strip()
                         # Strip option labels: A. B) 1. 2) I. II. III. i. ii. iii. etc.
@@ -592,13 +806,23 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
                             r'|(?:i{1,3}|iv|v|vi{0,3}|ix|x)[\.)\]]\s*'
                             r')', '', text
                         ).lstrip('\n').strip()
-                        
+
                         if text and text not in seen_texts:
                             seen_texts.add(text)
                             letter = chr(65 + letter_index)
                             options[letter] = text
-                            radio_buttons[letter] = radio
+                            input_type = input_elem.get_attribute('type')
+                            if input_type == 'checkbox':
+                                checkbox_buttons[letter] = input_elem
+                            else:
+                                radio_buttons[letter] = input_elem
                             letter_index += 1
+
+            # Validate and clean up malformed questions
+            if options:
+                q_type, options, checkbox_buttons, radio_buttons, val_warnings = validate_question(
+                    q_type, options, checkbox_buttons, radio_buttons
+                )
             
             # Info block (no options)
             if not options:
@@ -640,21 +864,38 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
 
             result = answer_question(
                 full_question, options, use_rag, rag_collection,
-                combined_image, combined_link, model, num_samples
+                combined_image, combined_link, model, num_samples,
+                q_type=q_type
             )
 
             answer = result['answer']
             confidence = result.get('confidence', 0)
 
-            # Click the answer
-            if answer in radio_buttons:
-                try:
-                    radio_buttons[answer].click()
-                    print(f"[PROGRESS] Q{q_num} → Answer: {answer} (confidence: {confidence}%)", flush=True)
-                except Exception as e:
-                    print(f"       ⚠️  Click failed: {e}", flush=True)
+            # Click the answer(s)
+            if q_type == 'multichoice_multi':
+                # Multi-answer: click multiple checkboxes
+                answer_letters = [l.strip() for l in answer.split(',')]
+                clicked = []
+                for letter in answer_letters:
+                    if letter in checkbox_buttons:
+                        try:
+                            checkbox_buttons[letter].click()
+                            clicked.append(letter)
+                        except Exception as e:
+                            print(f"       ⚠️  Checkbox click failed for {letter}: {e}", flush=True)
+                    elif letter != "?":
+                        print(f"       ⚠️  Answer '{letter}' not in checkbox options", flush=True)
+                print(f"[PROGRESS] Q{q_num} → Answer: {answer} (confidence: {confidence}%)", flush=True)
             else:
-                print(f"       ⚠️  Answer '{answer}' not in options")
+                # Single-answer: click one radio button
+                if answer in radio_buttons:
+                    try:
+                        radio_buttons[answer].click()
+                        print(f"[PROGRESS] Q{q_num} → Answer: {answer} (confidence: {confidence}%)", flush=True)
+                    except Exception as e:
+                        print(f"       ⚠️  Click failed: {e}", flush=True)
+                else:
+                    print(f"       ⚠️  Answer '{answer}' not in options")
             
             # Build result
             q_result = {

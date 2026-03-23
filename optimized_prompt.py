@@ -155,15 +155,19 @@ ANALYSIS STEPS:
 
 5. FINAL SELECTION: From options marked KEEP, select the single best answer.
 
-6. DOUBT CHECK: Before rating your probability, consider: what is the strongest argument AGAINST your chosen answer? What would make an alternative option correct instead?
+6. ALTERNATIVE: Which other option was the strongest runner-up? Name it (e.g. "C"), or say "none" if no other option is remotely plausible. Explain briefly why you rejected it.
+
+7. DOUBT CHECK: Considering the alternative and any other uncertainties, what is the strongest argument AGAINST your chosen answer?
 
 === REQUIRED OUTPUT FORMAT ===
-After your analysis, you MUST write these four lines:
+After your analysis, you MUST write these six lines:
 
 ANSWER: [write ONE letter: A, B, C, D, or E]
-PROBABILITY: [write a single digit 0-9 using the scale below]
-REASONING: [write one sentence explaining why]
+ALTERNATIVE: [write the runner-up letter, or "none"]
+ALT_RATIONALE: [write one sentence: why you rejected the alternative]
+REASONING: [write one sentence explaining why your answer is correct]
 DOUBT: [write one sentence about what could make your answer wrong]
+PROBABILITY: [write a single digit 0-9 using the scale below]
 
 PROBABILITY SCALE — rate the probability your answer is correct:
   0 = I am guessing randomly, I have no basis for this answer
@@ -177,7 +181,7 @@ PROBABILITY SCALE — rate the probability your answer is correct:
   8 = Likely correct with only minor reservations
   9 = Near certain, I would be very surprised if wrong
 
-Do not write anything after the DOUBT line.
+Do not write anything after the PROBABILITY line.
 
 Begin your analysis:"""
 
