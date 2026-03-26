@@ -320,11 +320,22 @@ def check_correct(answer, correct_answer):
     """
     Check if an answer matches the correct answer (supplementary fallback).
     Used only when Moodle's is_correct is not available.
-    Handles various formats (letter only, "A. text", etc.)
+    Handles various formats:
+    - Single letter: "A" vs "A"
+    - Letter with text: "A. Paris" vs "A"
+    - Multi-answer: "A, C, D" vs "A, C, D" (order-independent)
     """
     if not answer or not correct_answer:
         return None
     if correct_answer == 'UNKNOWN':
+        return None
+
+    # Multi-answer: if either contains a comma, compare as sorted sets
+    if ',' in answer or ',' in correct_answer:
+        answer_set = set(l.strip().upper() for l in answer.split(',') if l.strip())
+        correct_set = set(l.strip().upper() for l in correct_answer.split(',') if l.strip())
+        if answer_set and correct_set:
+            return answer_set == correct_set
         return None
 
     # Extract just the letter

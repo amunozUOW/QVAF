@@ -108,6 +108,40 @@ class TestCheckCorrect:
         assert check_correct("  A  ", "A") == True
         assert check_correct("A", "  A  ") == True
 
+    # --- Multi-answer correctness ---
+
+    def test_multi_answer_exact_match(self):
+        """Multi-answer: exact same letters in same order."""
+        assert check_correct("A, C, D", "A, C, D") == True
+
+    def test_multi_answer_different_order(self):
+        """Multi-answer: same letters in different order → correct."""
+        assert check_correct("D, A, C", "A, C, D") == True
+
+    def test_multi_answer_missing_selection(self):
+        """Multi-answer: missing a correct answer → incorrect."""
+        assert check_correct("A, C", "A, C, D") == False
+
+    def test_multi_answer_extra_selection(self):
+        """Multi-answer: extra incorrect answer → incorrect."""
+        assert check_correct("A, B, C, D", "A, C, D") == False
+
+    def test_multi_answer_completely_wrong(self):
+        """Multi-answer: completely different selections → incorrect."""
+        assert check_correct("B, E", "A, C, D") == False
+
+    def test_multi_answer_single_vs_multi(self):
+        """Single answer vs multi-answer correct → incorrect."""
+        assert check_correct("A", "A, C, D") == False
+
+    def test_multi_answer_case_insensitive(self):
+        """Multi-answer: case insensitive comparison."""
+        assert check_correct("a, c, d", "A, C, D") == True
+
+    def test_multi_answer_with_spaces(self):
+        """Multi-answer: extra spaces around letters."""
+        assert check_correct("A ,  C , D", "A, C, D") == True
+
 
 # ============================================
 # get_correctness_pattern() TESTS

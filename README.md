@@ -16,7 +16,10 @@ QVAF helps you understand which quiz questions are vulnerable to students simply
    - **Baseline**: AI answers using only general knowledge
    - **With course materials**: AI answers with access to your lecture notes/readings, uses Retreival Augmented Generation (RAG)
 
-2. **Measuring AI performance across a range of possible multiple choice questions (including questions with images embedded, tables, charts, and more than 5 answer options)**:
+2. **Measuring AI performance across multiple question types**:
+   - **Single-answer multiple choice** (radio buttons) — including images, tables, charts, and 5+ options
+   - **Multi-answer multiple choice** (checkboxes) — "select all that apply" questions
+   - **True/False** questions
    - Which questions does AI get right?
    - How confident is it?
    - How consistently does it answer?
@@ -274,6 +277,18 @@ All recommendations require your professional evaluation—they're starting poin
 
 ---
 
+## Supported Question Types
+
+| Moodle Type | Detection | How AI Answers | Notes |
+|-------------|-----------|---------------|-------|
+| **Multiple Choice (single answer)** | `multichoice` class + radio buttons | Single letter (e.g. "B") | Original supported type |
+| **Multiple Choice (multi answer)** | `multichoice` class + checkboxes | Comma-separated letters (e.g. "A, C, D") | "Select all that apply" questions |
+| **True/False** | `truefalse` class + radio buttons | Single letter ("A" for True, "B" for False) | Simplified prompt |
+
+**Malformed question handling:** The scanner gracefully handles instructor errors including empty options (removed), duplicate option text (deduped), and misconfigured multi-answer questions with only one checkbox (downgraded to single-answer). Unrecognized question types with radio buttons are treated as single-answer MCQ (best-guess fallback).
+
+---
+
 ## Project Structure
 
 ```
@@ -281,9 +296,11 @@ qvaf/
 ├── App.py                      # Main Streamlit application
 ├── config.py                   # Centralised configuration
 ├── quiz_browser_enhanced.py    # Browser automation + LLM interaction
+├── parsing_utils.py            # LLM response parsing (single + multi-answer)
 ├── reform_agent.py             # Cognitive classification + analysis
 ├── analysis_agent.py           # Dashboard generation
 ├── merge_attempts.py           # Combines baseline + RAG results
+├── app_test_question.py        # Test Question tab (single question testing)
 ├── requirements.txt            # Python dependencies
 │
 ├── ARCHITECTURE.md             # Technical documentation
@@ -409,6 +426,7 @@ If you use QVAF in research, please cite:
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 Areas where help is particularly welcome:
+- Support for additional question types (matching, short answer, drag-and-drop)
 - Support for additional LMS platforms (Canvas, Blackboard)
 - Additional LLM provider integrations
 - Localisation/translation

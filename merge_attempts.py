@@ -170,11 +170,15 @@ def merge_attempts(no_rag_data, with_rag_data):
         if is_correct_with_rag is not None:
             print(f"  Moodle is_correct (with-RAG): {is_correct_with_rag}")
 
+        # Propagate format type from raw question data
+        format_type = no_rag_q.get('type', 'multichoice_single')
+
         # Build merged question
         merged_q = {
             "id": question_id,
             "question": q_text,
             "options": options,
+            "format_type": format_type,
             "correct_answer": correct_answer,
             "is_correct_without_rag": is_correct_no_rag,
             "is_correct_with_rag": is_correct_with_rag,

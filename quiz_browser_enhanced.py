@@ -879,7 +879,7 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
                 for letter in answer_letters:
                     if letter in checkbox_buttons:
                         try:
-                            checkbox_buttons[letter].click()
+                            checkbox_buttons[letter].click(force=True)
                             clicked.append(letter)
                         except Exception as e:
                             print(f"       ⚠️  Checkbox click failed for {letter}: {e}", flush=True)
@@ -890,7 +890,7 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
                 # Single-answer: click one radio button
                 if answer in radio_buttons:
                     try:
-                        radio_buttons[answer].click()
+                        radio_buttons[answer].click(force=True)
                         print(f"[PROGRESS] Q{q_num} → Answer: {answer} (confidence: {confidence}%)", flush=True)
                     except Exception as e:
                         print(f"       ⚠️  Click failed: {e}", flush=True)

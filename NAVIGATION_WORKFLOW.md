@@ -41,15 +41,23 @@ The app now uses a dynamic tab system that shows only relevant tabs based on the
 **Steps:**
 1. From Instructions, expand "Testing a single question, no setup needed (2-3 minutes)"
 2. Click "Go to Test a Single Question"
-3. Type or paste a quiz question with multiple choice options
-4. Mark the correct answer
-5. Click "Test Single Question" to run the AI against that question
-6. Review the result and see if the AI answered it correctly and how confident it was
+3. Select the question type:
+   - **Multiple Choice (Single)** — standard single-answer MCQ
+   - **Multiple Choice (Multi)** — "select all that apply" with checkboxes
+   - **True/False** — two-option true/false
+4. Type or paste a quiz question with options
+5. Mark the correct answer(s):
+   - For Single MCQ: select one correct answer from dropdown
+   - For Multi MCQ: select all correct answers using multiselect
+   - For True/False: select True or False
+6. Click "Test Question" to run the AI against that question
+7. Review the result and see if the AI answered it correctly and how confident it was
 
 **Notes:**
 - Individual questions are tested with your configured LLM
 - No Moodle connection needed
 - Takes 30 seconds to 2 minutes depending on model speed
+- Multi-answer questions show comma-separated AI responses (e.g., "A, C, D")
 - Basic analysis is provided
 
 ---

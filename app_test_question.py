@@ -8,13 +8,17 @@ import streamlit as st
 import pandas as pd
 from collections import Counter
 
-from parsing_utils import parse_llm_response, extract_answer, extract_confidence, extract_reasoning
+from parsing_utils import (
+    parse_llm_response, extract_answer, extract_confidence, extract_reasoning,
+    parse_llm_response_multi, validate_multi_answer,
+)
 from config import AVAILABLE_MODELS, DEFAULT_MODEL
 from app_rag import check_rag_available
 
 
 def test_single_question(question: str, options: dict, correct_answer: str, model: str,
-                         use_rag: bool = False, num_samples: int = 1):
+                         use_rag: bool = False, num_samples: int = 1,
+                         q_type: str = "multichoice_single"):
     """
     Test a single question against the AI without browser automation.
 
@@ -44,9 +48,25 @@ def test_single_question(question: str, options: dict, correct_answer: str, mode
         except:
             pass
 
+    # Build type-specific prompt
+    is_multi = (q_type == 'multichoice_multi')
+
+    if is_multi:
+        task_instruction = "TASK: Answer this question correctly. Select ALL correct options — there may be more than one."
+        selection_step = "5. FINAL SELECTION: From options marked KEEP, select ALL correct answers."
+        answer_format = "ANSWER: [write ALL correct letters separated by commas, e.g. A, C, D]"
+    elif q_type == 'truefalse':
+        task_instruction = "TASK: Answer this true/false question correctly."
+        selection_step = "5. FINAL SELECTION: Choose True or False."
+        answer_format = "ANSWER: [write ONE letter: A (True) or B (False)]"
+    else:
+        task_instruction = "TASK: Answer this question correctly."
+        selection_step = "5. FINAL SELECTION: From options marked KEEP, select the single best answer."
+        answer_format = "ANSWER: [write ONE letter: A, B, C, D, or E] (if there are more than five options choose the correct answer from all the options)"
+
     # Use the optimized v4 prompt with calibrated confidence elicitation
     # (0-9 probability scale per Yang et al., 2024; "consider the opposite" per Chhikara et al., 2025)
-    prompt = f"""TASK: Answer this question correctly.
+    prompt = f"""{task_instruction}
 
 QUESTION: {question}
 
@@ -68,14 +88,14 @@ ANALYSIS STEPS:
 
 4. CALCULATION (if needed): Show your working.
 
-5. FINAL SELECTION: From options marked KEEP, select the single best answer.
+{selection_step}
 
 6. DOUBT CHECK: Before rating your probability, consider: what is the strongest argument AGAINST your chosen answer? What would make an alternative option correct instead?
 
 === REQUIRED OUTPUT FORMAT ===
 After your analysis, you MUST write these four lines:
 
-ANSWER: [write ONE letter: A, B, C, D, or E] (if there are more than five options choose the correct answer from all the options)
+{answer_format}
 PROBABILITY: [write a single digit 0-9 using the scale below]
 REASONING: [write 1-2 sentences explaining why]
 DOUBT: [write one sentence about what could make your answer wrong]
@@ -108,9 +128,24 @@ Begin your analysis:"""
             text = response['message']['content']
 
             # Parse response using shared parsing utilities
-            ai_answer, confidence, reasoning = parse_llm_response(text)
+            if is_multi:
+                ai_answer, confidence, reasoning = parse_llm_response_multi(text)
+                ai_answer_letters = validate_multi_answer(
+                    [l.strip() for l in ai_answer.split(',')], options
+                )
+                ai_answer = ", ".join(ai_answer_letters)
+            else:
+                ai_answer, confidence, reasoning = parse_llm_response(text)
 
-            is_correct = ai_answer == correct_answer.upper() if correct_answer else None
+            # Correctness check: multi-answer compares sorted sets
+            if correct_answer and is_multi:
+                correct_set = set(l.strip().upper() for l in correct_answer.split(','))
+                ai_set = set(ai_answer_letters) if ai_answer != "?" else set()
+                is_correct = ai_set == correct_set
+            elif correct_answer:
+                is_correct = ai_answer == correct_answer.upper()
+            else:
+                is_correct = None
 
             return {
                 'ai_answer': ai_answer,
@@ -144,8 +179,15 @@ Begin your analysis:"""
                 text = response['message']['content']
 
                 # Parse using shared parsing utilities
-                answer = extract_answer(text)
-                conf = extract_confidence(text)
+                if is_multi:
+                    ans_str, conf, _ = parse_llm_response_multi(text)
+                    ans_letters = validate_multi_answer(
+                        [l.strip() for l in ans_str.split(',')], options
+                    )
+                    answer = ", ".join(ans_letters)
+                else:
+                    answer = extract_answer(text)
+                    conf = extract_confidence(text)
 
                 answers.append(answer)
                 confidences.append(conf)
@@ -167,7 +209,11 @@ Begin your analysis:"""
 
             # Select MOST COMMON answer (not highest confidence)
             distribution = dict(Counter(answers))
-            valid = {k: v for k, v in distribution.items() if k in 'ABCDE'}
+            if is_multi:
+                # For multi-answer, all keys are valid (they're comma-separated strings)
+                valid = {k: v for k, v in distribution.items() if k != "?"}
+            else:
+                valid = {k: v for k, v in distribution.items() if k in 'ABCDE'}
 
             if valid:
                 most_common = max(valid.items(), key=lambda x: x[1])
@@ -177,7 +223,15 @@ Begin your analysis:"""
                 final_answer = "?"
                 consistency_count = 0
 
-            is_correct = final_answer == correct_answer.upper() if correct_answer and final_answer != "?" else None
+            # Correctness check
+            if correct_answer and final_answer != "?" and is_multi:
+                correct_set = set(l.strip().upper() for l in correct_answer.split(','))
+                ai_set = set(l.strip() for l in final_answer.split(','))
+                is_correct = ai_set == correct_set
+            elif correct_answer and final_answer != "?":
+                is_correct = final_answer == correct_answer.upper()
+            else:
+                is_correct = None
 
             # Calculate average confidence
             valid_confs = [c for c in confidences if c > 0]
@@ -237,7 +291,20 @@ def render_test_question_tab(tab_obj):
             st.markdown("### Enter Question")
 
             # Question type selector
-            q_type = st.radio("Question Type", ["Multiple Choice", "True/False"], horizontal=True, key="q_type_select")
+            q_type_label = st.radio(
+                "Question Type",
+                ["Multiple Choice (Single)", "Multiple Choice (Multi)", "True/False"],
+                horizontal=True,
+                key="q_type_select"
+            )
+
+            # Map UI label to internal type
+            q_type_map = {
+                "Multiple Choice (Single)": "multichoice_single",
+                "Multiple Choice (Multi)": "multichoice_multi",
+                "True/False": "truefalse",
+            }
+            q_type_internal = q_type_map[q_type_label]
 
             question_text = st.text_area(
                 "Question text",
@@ -246,7 +313,7 @@ def render_test_question_tab(tab_obj):
                 key="test_q_text"
             )
 
-            if q_type == "Multiple Choice":
+            if q_type_label in ("Multiple Choice (Single)", "Multiple Choice (Multi)"):
                 st.markdown("### Options")
 
                 opt_cols = st.columns(2)
@@ -258,7 +325,15 @@ def render_test_question_tab(tab_obj):
                     opt_d = st.text_input("D.", key="opt_d")
                     opt_e = st.text_input("E.", key="opt_e")
 
-                correct = st.selectbox("Correct answer", ["A", "B", "C", "D", "E"], key="correct_ans")
+                if q_type_label == "Multiple Choice (Multi)":
+                    correct_multi = st.multiselect(
+                        "Correct answers (select all that apply)",
+                        ["A", "B", "C", "D", "E"],
+                        key="correct_ans_multi"
+                    )
+                    correct = ", ".join(sorted(correct_multi)) if correct_multi else ""
+                else:
+                    correct = st.selectbox("Correct answer", ["A", "B", "C", "D", "E"], key="correct_ans")
             else:
                 # True/False
                 opt_a = "True"
@@ -333,7 +408,8 @@ def render_test_question_tab(tab_obj):
                                 correct_answer=correct,
                                 model=test_model,
                                 use_rag=test_with_rag,
-                                num_samples=num_samples
+                                num_samples=num_samples,
+                                q_type=q_type_internal
                             )
                             st.session_state.test_question_result = result
                         finally:

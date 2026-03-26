@@ -11,6 +11,7 @@ This document captures implementation plans and priorities for the Quiz Vulnerab
 | 1 | Split App.py into modules | 1 session | Makes everything else easier + better vibe coding | DONE (App.py 286 lines → 8 modules) |
 | 2 | Extract parsing into shared utils | 1 session | Required for both testing and standalone mode | DONE |
 | 3 | Automated tests (Priority 1-2) | 1 session | Protects existing code before we add features | DONE (127 tests) |
+| 3.5 | Multi-answer MCQ + True/False support | 1 session | Handles checkbox and T/F question types | DONE (308 tests) |
 | 4 | Standalone manual entry mode | 2-3 sessions | Biggest adoption unlock | NOT STARTED |
 | 5 | Text paste parser | 1 session | Speed upgrade for manual mode | NOT STARTED |
 | 6 | CSV/spreadsheet upload | 1 session | Familiar format for educators | NOT STARTED |
@@ -304,3 +305,4 @@ These items were discussed and intentionally deprioritised or rejected:
 | Moodle XML / QTI file import | Rejected for now | Non-technical users cannot generate these; complex to parse |
 | LMS API integrations | Deferred | Requires institutional access to develop against |
 | Broader LMS support (Canvas, Blackboard, Google, MS Forms) | Future priority | Needs access to live instances; browser automation approach may generalise |
+| Additional question types (matching, short answer, drag-and-drop) | Future priority | Medium-high effort; multi-answer MCQ and True/False completed as highest-value additions |
