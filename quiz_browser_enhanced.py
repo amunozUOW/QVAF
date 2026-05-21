@@ -881,7 +881,15 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
                             r')', '', text
                         ).lstrip('\n').strip()
 
-                        if text and text not in seen_texts:
+                        # If text is empty (image-only option), use a placeholder
+                        if not text:
+                            has_img = item.query_selector('img') is not None
+                            if has_img:
+                                text = f"[Image option {chr(65 + letter_index)}]"
+                            else:
+                                continue
+
+                        if text not in seen_texts:
                             seen_texts.add(text)
                             letter = chr(65 + letter_index)
                             options[letter] = text

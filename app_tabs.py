@@ -270,7 +270,8 @@ def render_first_scan_tab(tab_obj):
 
                 st.markdown("")
 
-                if st.button("Start Scan", type="primary", use_container_width=True):
+                if st.button("Start Scan", type="primary", use_container_width=True,
+                             disabled=st.session_state.get('is_scanning', False)):
                     st.session_state.is_scanning = True
                     clear_log()
                     st.session_state._scan_trigger = 'no_rag'
@@ -392,7 +393,8 @@ def render_second_scan_tab(tab_obj):
 
                 st.markdown("")
 
-                if st.button("Start Second Scan", type="primary", use_container_width=True):
+                if st.button("Start Second Scan", type="primary", use_container_width=True,
+                             disabled=st.session_state.get('is_scanning', False)):
                     st.session_state.is_scanning = True
                     clear_log()
                     st.session_state._scan_trigger = 'with_rag'
