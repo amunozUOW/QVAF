@@ -23,7 +23,7 @@ Usage:
 Options:
   --iterations N     Maximum evolution iterations (default: 3)
   --target N         Target AI failure rate % (default: 70)
-  --model MODEL      Ollama model to use (default: llama3:8b)
+  --model MODEL      Ollama model to use (default: llama3.2:3b)
   --focus CATEGORY   Only evolve HIGH, MODERATE, or both (default: both)
 """
 
@@ -50,7 +50,7 @@ except ImportError:
 try:
     from config import DEFAULT_MODEL
 except ImportError:
-    DEFAULT_MODEL = "llama3:8b"
+    DEFAULT_MODEL = "llama3.2:3b"
 
 EVOLUTION_MODEL = DEFAULT_MODEL  # Model for rewriting
 VALIDATION_MODEL = DEFAULT_MODEL  # Model for validation checks

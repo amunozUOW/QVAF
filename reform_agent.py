@@ -31,7 +31,7 @@ try:
     from config import REPORTS_DIR, DEFAULT_MODEL
 except ImportError:
     REPORTS_DIR = Path(".")
-    DEFAULT_MODEL = "llama3:8b"
+    DEFAULT_MODEL = "llama3.2:3b"
 
 # Global model variable - can be set via command line
 ANALYSIS_MODEL = DEFAULT_MODEL

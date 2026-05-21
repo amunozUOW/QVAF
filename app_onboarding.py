@@ -11,7 +11,7 @@ import os
 import streamlit as st
 
 from config import CHROMA_DB_PATH, DEFAULT_COLLECTION_NAME, get_rag_collection_name
-from app_checks import check_chrome, check_ollama
+from app_checks import check_chrome, check_ollama, get_installed_models
 from app_test_question import test_single_question
 
 
@@ -49,12 +49,12 @@ def show_onboarding():
         col1, col2 = st.columns(2)
 
         with col1:
-            text_model_ok, vision_ok = check_ollama()
+            text_model_ok, vision_ok, _ = check_ollama()
             if text_model_ok:
                 st.success("\u2713 AI Models Ready")
             else:
                 st.error("\u2717 AI Models Missing")
-                st.caption("Run: `ollama pull llama3:8b`")
+                st.caption("Run: `ollama pull llama3.2:3b`")
 
         with col2:
             chrome_ok, _ = check_chrome()
@@ -73,12 +73,12 @@ def show_onboarding():
             st.markdown("""
             **To install AI models**, open Terminal and run:
             ```bash
-            ollama pull llama3:8b
+            ollama pull llama3.2:3b
             ```
             Then click refresh:
             """)
             if st.button("Refresh Status", use_container_width=False):
-                check_ollama.clear()
+                get_installed_models.clear()
                 st.rerun()
 
         # ===== Test a Single Question Section (available immediately if AI is ready) =====

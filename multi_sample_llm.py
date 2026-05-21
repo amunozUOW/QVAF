@@ -13,7 +13,7 @@ Usage:
     result = ask_question_multi_sample(
         question="What is the capital of France?",
         options={'A': 'London', 'B': 'Paris', 'C': 'Berlin', 'D': 'Madrid'},
-        model='llama3:8b',
+        model='llama3.2:3b',
         num_samples=10,
         rag_context=""  # Optional course materials
     )
@@ -36,7 +36,7 @@ except ImportError:
 try:
     from config import DEFAULT_MODEL
 except ImportError:
-    DEFAULT_MODEL = "llama3:8b"
+    DEFAULT_MODEL = "llama3.2:3b"
 
 
 def ask_question_single(

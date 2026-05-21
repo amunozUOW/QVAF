@@ -30,16 +30,22 @@ TEMP_SCREENSHOTS_DIR = PROJECT_ROOT / "temp_screenshots"
 # LLM CONFIGURATION
 # ============================================
 
-DEFAULT_MODEL = "llama3:8b"
+DEFAULT_MODEL = "llama3.2:3b"
 VISION_MODEL = "llava"
 OLLAMA_HOST = "http://localhost:11434"
 
-# Available models (in order of recommendation)
+# Friendly labels for known models (models not listed here still appear in the
+# selector — the sidebar generates a label automatically for unlisted ones).
 AVAILABLE_MODELS = {
-    'llama3:8b': 'Llama 3 8B (recommended, 100% test accuracy)',
-    'mistral': 'Mistral 7B (faster, 60% test accuracy)',
-    'gemma2:9b': 'Gemma 2 9B (alternative)',
-    'mixtral': 'Mixtral 8x7B (best quality, needs 26GB RAM)',
+    'llama3.2:3b': 'Llama 3.2 3B (recommended — fast, 2 GB)',
+    'llama3.2:1b': 'Llama 3.2 1B (ultra-light, 1.3 GB)',
+    'llama3.1:8b': 'Llama 3.1 8B (higher accuracy, 4.7 GB)',
+    'llama3:8b': 'Llama 3 8B (legacy)',
+    'gemma2:9b': 'Gemma 2 9B (alternative, 5.4 GB)',
+    'qwen2.5:7b': 'Qwen 2.5 7B (alternative, 4.7 GB)',
+    'phi4:14b': 'Phi-4 14B (high quality, 9 GB)',
+    'mistral': 'Mistral 7B (fast, 4.1 GB)',
+    'deepseek-r1:8b': 'DeepSeek-R1 8B (reasoning, 4.9 GB)',
 }
 
 # ============================================
@@ -67,6 +73,7 @@ EXCLUDE_URL_PATTERNS = [
 # Collection naming: all user collections are prefixed with this
 RAG_COLLECTION_PREFIX = "rag_"
 DEFAULT_COLLECTION_NAME = "Default"
+CHROMA_COLLECTION_NAME = f"{RAG_COLLECTION_PREFIX}Default"
 RAG_TOP_K_RESULTS = 3
 
 def get_rag_collection_name(user_name: str) -> str:

@@ -45,7 +45,7 @@ except ImportError:
 try:
     from config import DEFAULT_MODEL
 except ImportError:
-    DEFAULT_MODEL = "llama3:8b"
+    DEFAULT_MODEL = "llama3.2:3b"
 
 
 # ============================================

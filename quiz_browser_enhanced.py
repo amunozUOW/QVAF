@@ -64,7 +64,7 @@ try:
     ensure_directories()
 except ImportError:
     # Fallback for standalone usage
-    DEFAULT_MODEL = "llama3:8b"
+    DEFAULT_MODEL = "llama3.2:3b"
     OLLAMA_VISION_MODEL = "llava"
     CHROMA_DB_PATH = "./chroma_db"
     CHROMA_COLLECTION = "unit_materials"

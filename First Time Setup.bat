@@ -113,6 +113,18 @@ if errorlevel 1 (
     python -m pip install chromadb
 )
 
+python -c "import ollama; print('  ollama: OK')" 2>nul
+if errorlevel 1 (
+    echo [ERROR] Ollama Python package not installed!
+    python -m pip install ollama
+)
+
+python -c "import pypdf; print('  pypdf: OK')" 2>nul
+if errorlevel 1 (
+    echo [ERROR] pypdf not installed!
+    python -m pip install pypdf
+)
+
 echo.
 echo [OK] Python packages installed
 
@@ -145,12 +157,12 @@ if errorlevel 1 (
     echo Ollama not found.
     echo.
     echo Please install Ollama:
-    echo   1. Go to https://ollama.ai/download/windows
+    echo   1. Go to https://ollama.com/download/windows
     echo   2. Download and run the installer
     echo   3. After installation, run this setup again
     echo.
     echo Opening download page...
-    start https://ollama.ai/download/windows
+    start https://ollama.com/download/windows
     echo.
     echo After installing Ollama, please run this setup again.
     pause
@@ -175,11 +187,11 @@ echo --------------------------------------------------------
 echo  Step 5 of 5: Downloading AI models
 echo --------------------------------------------------------
 echo.
-echo This will download ~9GB of AI models. This is a one-time download.
+echo This will download AI models. This is a one-time download.
 echo.
 
-echo Downloading Llama 3 (main model, ~4.7GB)...
-ollama pull llama3:8b
+echo Downloading Llama 3.2 3B (main model, ~2GB)...
+ollama pull llama3.2:3b
 
 echo.
 echo Downloading LLaVA (vision model, ~4.5GB)...

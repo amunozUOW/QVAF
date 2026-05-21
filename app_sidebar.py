@@ -13,7 +13,7 @@ from config import (
     AVAILABLE_MODELS, CHROMA_DB_PATH,
     get_rag_collection_name, get_display_name
 )
-from app_checks import check_chrome, check_ollama
+from app_checks import check_chrome, check_ollama, check_stack, get_installed_models, VISION_MODEL_KEYWORDS
 from app_rag import get_all_courses, get_course_files, process_uploaded_files
 
 
@@ -32,16 +32,25 @@ def render_sidebar():
         # ── SYSTEM STATUS ──
         st.markdown("**SYSTEM STATUS**")
 
-        text_model_ok, vision_ok = check_ollama()
+        text_model_ok, vision_ok, installed_models = check_ollama()
+
+        # Auto-select the first available text model when current default isn't installed
+        if installed_models and st.session_state.model not in [m.lower() for m in installed_models]:
+            text_names = [
+                m for m in installed_models
+                if not any(kw in m.split(':')[0].lower() for kw in VISION_MODEL_KEYWORDS)
+            ]
+            if text_names:
+                st.session_state.model = text_names[0]
 
         # 1. AI status
         if text_model_ok:
             st.success(f"AI Ready: {st.session_state.model}")
         else:
             st.error("AI Models Missing")
-            st.caption("Run: `ollama pull llama3:8b`")
+            st.caption("Run: `ollama pull llama3.2:3b`")
             if st.button("Refresh", key="sidebar_refresh_ai"):
-                check_ollama.clear()
+                get_installed_models.clear()
                 st.rerun()
 
         # 2. Workflow status
@@ -124,6 +133,21 @@ Then navigate to your quiz and start an attempt.
             if current_step == len(steps):
                 st.success("All steps complete!")
 
+        # Stack diagnostics (collapsed by default)
+        with st.expander("System Diagnostics", expanded=False):
+            stack = check_stack()
+            all_ok = all(item['ok'] for item in stack)
+            for item in stack:
+                icon = "+" if item['ok'] else "-"
+                st.markdown(f"`[{icon}]` **{item['component']}** — {item['detail']}")
+            if all_ok:
+                st.caption("All components healthy.")
+            else:
+                if st.button("Re-check", key="sidebar_recheck_stack"):
+                    check_stack.clear()
+                    get_installed_models.clear()
+                    st.rerun()
+
         st.divider()
 
         # ── SETTINGS ──
@@ -134,26 +158,24 @@ Then navigate to your quiz and start an attempt.
 
         with st.expander("AI Model", expanded=False):
             if can_change_model:
-                # Get only installed models
-                sidebar_models = dict(AVAILABLE_MODELS)
-                try:
-                    import ollama as ollama_sidebar
-                    models_resp = ollama_sidebar.list()
-                    installed_names = []
-                    for m in models_resp.get('models', []):
-                        name = m.get('name', '') or m.get('model', '')
-                        if name:
-                            installed_names.append(name.lower())
+                # Build model list from what Ollama actually has installed
+                all_installed = get_installed_models()
+                text_installed = [
+                    m for m in all_installed
+                    if not any(kw in m.split(':')[0].lower() for kw in VISION_MODEL_KEYWORDS)
+                ]
 
-                    # Filter to only installed
-                    sidebar_models = {
-                        k: v for k, v in AVAILABLE_MODELS.items()
-                        if any(k.split(':')[0].lower() in inst or k.lower() in inst for inst in installed_names)
-                    }
-                    if not sidebar_models:
-                        sidebar_models = {'llama3:8b': 'Llama 3 8B (not installed)'}
-                except:
-                    pass  # Keep all models if can't connect
+                sidebar_models = {}
+                for name in text_installed:
+                    label = AVAILABLE_MODELS.get(name)
+                    if label is None:
+                        base = name.split(':')[0]
+                        tag = name.split(':')[1] if ':' in name else 'latest'
+                        label = f"{base.title()} ({tag})"
+                    sidebar_models[name] = label
+
+                if not sidebar_models:
+                    sidebar_models = {'llama3.2:3b': 'Llama 3.2 3B (not installed)'}
 
                 selected = st.selectbox(
                     "Select model",

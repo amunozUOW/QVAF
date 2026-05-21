@@ -201,7 +201,7 @@ if __name__ == "__main__":
     try:
         from config import DEFAULT_MODEL
     except ImportError:
-        DEFAULT_MODEL = "llama3:8b"
+        DEFAULT_MODEL = "llama3.2:3b"
     
     # Test questions
     TEST_QUESTIONS = [

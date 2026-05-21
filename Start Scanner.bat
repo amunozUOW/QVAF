@@ -42,7 +42,7 @@ if errorlevel 1 (
 echo [OK] Ollama ready
 
 REM 3. Check for required models (in background)
-start /B cmd /c "ollama list | find "llama3:8b" >nul || (echo Downloading llama3:8b... & ollama pull llama3:8b)"
+start /B cmd /c "ollama list | find "llama3.2:3b" >nul || (echo Downloading llama3.2:3b... & ollama pull llama3.2:3b)"
 start /B cmd /c "ollama list | find "llava" >nul || (echo Downloading llava... & ollama pull llava)"
 
 REM 4. Activate virtual environment

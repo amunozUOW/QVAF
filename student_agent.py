@@ -4,7 +4,7 @@ import ollama
 try:
     from config import DEFAULT_MODEL
 except ImportError:
-    DEFAULT_MODEL = "llama3:8b"
+    DEFAULT_MODEL = "llama3.2:3b"
 
 # Load the database
 client = chromadb.PersistentClient(path="./chroma_db")

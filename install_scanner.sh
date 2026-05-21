@@ -28,7 +28,7 @@ echo ""
 echo "Step 2: Checking for source files..."
 
 REQUIRED_FILES=(
-    "app_v2.py"
+    "App.py"
 )
 
 OPTIONAL_FILES=(
@@ -101,7 +101,7 @@ fi
 # Start Streamlit if not already running
 if ! lsof -i :8501 > /dev/null 2>&1; then
     echo "Starting Streamlit..."
-    python3 -m streamlit run app_v2.py \
+    python3 -m streamlit run App.py \
         --server.port=8501 \
         --server.headless=true &
     sleep 4

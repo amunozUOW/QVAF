@@ -92,7 +92,7 @@ else
     else
         echo -e "${RED}Homebrew not found. Please install Ollama manually:${NC}"
         echo "  brew install ollama"
-        echo "  OR download from: https://ollama.ai/download"
+        echo "  OR download from: https://ollama.com/download"
         exit 1
     fi
 fi
@@ -110,8 +110,8 @@ if ! pgrep -x "ollama" > /dev/null; then
     sleep 3  # Wait for service to start
 fi
 
-echo "Downloading llama3:8b (main model, ~4.7GB)..."
-ollama pull llama3:8b
+echo "Downloading llama3.2:3b (main model, ~2GB)..."
+ollama pull llama3.2:3b
 
 echo "Downloading llava (vision model, ~4.5GB)..."
 ollama pull llava

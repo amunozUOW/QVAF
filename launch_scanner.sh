@@ -72,12 +72,12 @@ else
     fi
     
     # Check for app file
-    if [ -f "app_v2.py" ]; then
-        APP_FILE="app_v2.py"
+    if [ -f "App.py" ]; then
+        APP_FILE="App.py"
     elif [ -f "app.py" ]; then
         APP_FILE="app.py"
     else
-        echo -e "${RED}No app.py or app_v2.py found in $SCANNER_DIR${NC}"
+        echo -e "${RED}No app.py or App.py found in $SCANNER_DIR${NC}"
         echo "Press any key to exit..."
         read -n 1
         exit 1

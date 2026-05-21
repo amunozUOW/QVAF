@@ -110,7 +110,7 @@ python -m venv venv
 python -m pip install -r requirements.txt
 python -m playwright install chromium
 
-# Install Ollama from https://ollama.ai/download/windows
+# Install Ollama from https://ollama.com/download/windows
 # Then download models:
 ollama pull llama3:8b
 ollama pull llava
@@ -134,7 +134,7 @@ pip install -r requirements.txt
 python -m playwright install chromium
 
 # Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
+curl -fsSL https://ollama.com/install.sh | sh
 
 # Download AI models
 ollama pull llama3:8b
@@ -443,7 +443,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) for deta
 ## Acknowledgments
 
 - Built to support [TEQSA 2025 guidance](https://www.teqsa.gov.au/) on AI-irrelevant assessment design
-- Uses [Ollama](https://ollama.ai/) for local LLM inference
+- Uses [Ollama](https://ollama.com/) for local LLM inference
 - Uses [Playwright](https://playwright.dev/) for browser automation
 - Uses [ChromaDB](https://www.trychroma.com/) for vector storage
 - Theoretical framework draws on work by Lodge, Bearman, Dawson, and Associates
