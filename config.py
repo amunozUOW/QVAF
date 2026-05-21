@@ -32,7 +32,9 @@ TEMP_SCREENSHOTS_DIR = PROJECT_ROOT / "temp_screenshots"
 
 DEFAULT_MODEL = "llama3.2:3b"
 VISION_MODEL = "llava"
-OLLAMA_HOST = "http://localhost:11434"
+OLLAMA_DEFAULT_PORT = 11434
+OLLAMA_FALLBACK_PORT = 11435
+OLLAMA_HOST = f"http://localhost:{OLLAMA_DEFAULT_PORT}"
 
 # Friendly labels for known models (models not listed here still appear in the
 # selector — the sidebar generates a label automatically for unlisted ones).

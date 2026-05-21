@@ -4,6 +4,7 @@ System checks and activity log functions.
 Extracted from App.py — no logic changes.
 """
 
+import os
 import streamlit as st
 from datetime import datetime
 
@@ -74,32 +75,87 @@ def _scan_ollama_filesystem():
     return installed
 
 
+def _ensure_ollama_host():
+    """Try the default Ollama port, then the fallback port.
+
+    If the default port (11434) is blocked (common with Cisco Secure Client
+    on university machines), try the fallback port (11435) and start Ollama
+    on it if needed. Sets the OLLAMA_HOST env var so the ollama Python client
+    uses the working port for all subsequent calls.
+    """
+    if os.environ.get('_OLLAMA_HOST_RESOLVED'):
+        return
+
+    from config import OLLAMA_DEFAULT_PORT, OLLAMA_FALLBACK_PORT
+    import socket
+
+    for port in [OLLAMA_DEFAULT_PORT, OLLAMA_FALLBACK_PORT]:
+        try:
+            sock = socket.create_connection(('127.0.0.1', port), timeout=2)
+            sock.close()
+            os.environ['OLLAMA_HOST'] = f'http://127.0.0.1:{port}'
+            os.environ['_OLLAMA_HOST_RESOLVED'] = '1'
+            return
+        except (ConnectionRefusedError, socket.timeout, OSError):
+            continue
+
+    # Neither port responded — try starting Ollama on the fallback port
+    import subprocess
+    try:
+        env = os.environ.copy()
+        env['OLLAMA_HOST'] = f'127.0.0.1:{OLLAMA_FALLBACK_PORT}'
+        subprocess.Popen(
+            ['/Applications/Ollama.app/Contents/Resources/ollama', 'serve'],
+            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        import time
+        time.sleep(3)
+        try:
+            sock = socket.create_connection(('127.0.0.1', OLLAMA_FALLBACK_PORT), timeout=2)
+            sock.close()
+            os.environ['OLLAMA_HOST'] = f'http://127.0.0.1:{OLLAMA_FALLBACK_PORT}'
+            os.environ['_OLLAMA_HOST_RESOLVED'] = '1'
+            return
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def _list_models_via_api():
+    """Call ollama.list() and return a list of model name strings."""
+    import ollama
+    models_response = ollama.list()
+
+    raw_models = getattr(models_response, 'models', None)
+    if raw_models is None:
+        raw_models = models_response.get('models', []) if hasattr(models_response, 'get') else []
+
+    installed = []
+    for m in raw_models:
+        name = getattr(m, 'model', None) or getattr(m, 'name', None)
+        if name is None and isinstance(m, dict):
+            name = m.get('name', '') or m.get('model', '')
+        if name:
+            installed.append(name)
+    return installed
+
+
 @st.cache_data(ttl=120)
 def get_installed_models():
     """Query Ollama for all installed models.
 
-    Tries the Ollama API first, then falls back to reading the on-disk
-    manifest registry (handles VPN/firewall software blocking localhost).
+    Probes the default and fallback ports, auto-starts Ollama on the
+    fallback port if needed, then queries the API. Falls back to reading
+    the on-disk manifest registry if the API is still unreachable.
 
     Returns a list of model name strings (e.g. ['qwen3:14b', 'llava:latest']),
     or an empty list if nothing is found.
     """
-    # Try the API first
+    _ensure_ollama_host()
+
     try:
-        import ollama
-        models_response = ollama.list()
-
-        raw_models = getattr(models_response, 'models', None)
-        if raw_models is None:
-            raw_models = models_response.get('models', []) if hasattr(models_response, 'get') else []
-
-        installed = []
-        for m in raw_models:
-            name = getattr(m, 'model', None) or getattr(m, 'name', None)
-            if name is None and isinstance(m, dict):
-                name = m.get('name', '') or m.get('model', '')
-            if name:
-                installed.append(name)
+        installed = _list_models_via_api()
         if installed:
             return installed
     except Exception:
