@@ -54,6 +54,73 @@ def check_chrome():
         return False, str(e)
 
 
+def is_debug_port_open():
+    """Check whether anything is listening on the Chrome debug port."""
+    import socket
+    try:
+        sock = socket.create_connection(('127.0.0.1', 9222), timeout=1)
+        sock.close()
+        return True
+    except (ConnectionRefusedError, socket.timeout, OSError):
+        return False
+
+
+def launch_chrome_debug():
+    """Launch Chrome with --remote-debugging-port=9222.
+
+    Works on macOS and Windows. Returns (ok, message).
+    """
+    import subprocess, sys, time
+
+    if is_debug_port_open():
+        return True, "Debug port already open"
+
+    if sys.platform == 'darwin':
+        chrome_paths = [
+            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        ]
+    else:
+        chrome_paths = [
+            r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+            r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+        ]
+
+    chrome_bin = None
+    for p in chrome_paths:
+        from pathlib import Path
+        if Path(p).exists():
+            chrome_bin = p
+            break
+
+    if chrome_bin is None:
+        return False, "Chrome not found"
+
+    import tempfile
+    profile_dir = os.path.join(tempfile.gettempdir(), 'chrome-qvaf-debug')
+
+    try:
+        subprocess.Popen(
+            [chrome_bin,
+             '--remote-debugging-port=9222',
+             f'--user-data-dir={profile_dir}',
+             '--no-first-run',
+             '--no-default-browser-check',
+             'about:blank'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as e:
+        return False, str(e)
+
+    for _ in range(8):
+        time.sleep(1)
+        if is_debug_port_open():
+            return True, "Chrome launched"
+
+    return False, "Chrome started but debug port not ready — try again"
+
+
 def _scan_ollama_filesystem():
     """Read installed models directly from Ollama's on-disk manifest registry.
 

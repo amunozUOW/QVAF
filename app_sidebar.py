@@ -13,7 +13,10 @@ from config import (
     AVAILABLE_MODELS, CHROMA_DB_PATH,
     get_rag_collection_name, get_display_name
 )
-from app_checks import check_chrome, check_ollama, check_stack, get_installed_models, VISION_MODEL_KEYWORDS
+from app_checks import (
+    check_chrome, check_ollama, check_stack, get_installed_models,
+    launch_chrome_debug, is_debug_port_open, VISION_MODEL_KEYWORDS
+)
 from app_rag import get_all_courses, get_course_files, process_uploaded_files
 
 
@@ -70,32 +73,31 @@ def render_sidebar():
         else:
             st.warning("Browser: Not connected")
             if workflow is not None:
-                if st.button("Connect to Browser", use_container_width=True, key="sidebar_connect_browser"):
-                    with st.spinner("Connecting..."):
-                        ok, url = check_chrome()
-                    if ok:
-                        st.session_state.chrome_ok = True
-                        st.rerun()
-                    else:
-                        st.error("Could not connect.")
-                        with st.expander("Troubleshooting"):
-                            st.markdown("""
-**If "Start Scanner" was used to launch the app**, Chrome should connect automatically. Try clicking Connect again.
-
-**Manual setup (if Chrome wasn't started by the app):**
-
-macOS:
-```
-/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
-```
-
-Windows:
-```
-"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir=%TEMP%\\chrome-debug
-```
-
-Then navigate to your quiz and start an attempt.
-                        """)
+                col_launch, col_connect = st.columns(2)
+                with col_launch:
+                    if st.button("Launch Browser", use_container_width=True, key="sidebar_launch_browser"):
+                        with st.spinner("Starting Chrome..."):
+                            ok, msg = launch_chrome_debug()
+                        if ok:
+                            st.success(msg)
+                            with st.spinner("Connecting..."):
+                                conn_ok, url = check_chrome()
+                            if conn_ok:
+                                st.session_state.chrome_ok = True
+                                st.rerun()
+                            else:
+                                st.info("Chrome running — navigate to your quiz, then click Connect.")
+                        else:
+                            st.error(msg)
+                with col_connect:
+                    if st.button("Connect", use_container_width=True, key="sidebar_connect_browser"):
+                        with st.spinner("Connecting..."):
+                            ok, url = check_chrome()
+                        if ok:
+                            st.session_state.chrome_ok = True
+                            st.rerun()
+                        else:
+                            st.error("No Moodle quiz page found. Open a quiz attempt first.")
 
         # Progress steps — only shown after a workflow is selected
         if workflow is not None:
