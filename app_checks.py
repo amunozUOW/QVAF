@@ -53,13 +53,38 @@ def check_chrome():
         return False, str(e)
 
 
+def _scan_ollama_filesystem():
+    """Read installed models directly from Ollama's on-disk manifest registry.
+
+    Works even when the Ollama API is unreachable (e.g. blocked by Cisco
+    Secure Client socket filter on university machines).
+    """
+    from pathlib import Path
+    manifests = Path.home() / ".ollama" / "models" / "manifests" / "registry.ollama.ai" / "library"
+    if not manifests.is_dir():
+        return []
+    installed = []
+    for model_dir in sorted(manifests.iterdir()):
+        if not model_dir.is_dir():
+            continue
+        name = model_dir.name
+        for tag_file in sorted(model_dir.iterdir()):
+            if tag_file.is_file():
+                installed.append(f"{name}:{tag_file.name}")
+    return installed
+
+
 @st.cache_data(ttl=120)
 def get_installed_models():
     """Query Ollama for all installed models.
 
-    Returns a list of model name strings (e.g. ['llama3:8b', 'llava:latest']),
-    or an empty list if Ollama is unreachable.
+    Tries the Ollama API first, then falls back to reading the on-disk
+    manifest registry (handles VPN/firewall software blocking localhost).
+
+    Returns a list of model name strings (e.g. ['qwen3:14b', 'llava:latest']),
+    or an empty list if nothing is found.
     """
+    # Try the API first
     try:
         import ollama
         models_response = ollama.list()
@@ -75,9 +100,13 @@ def get_installed_models():
                 name = m.get('name', '') or m.get('model', '')
             if name:
                 installed.append(name)
-        return installed
+        if installed:
+            return installed
     except Exception:
-        return []
+        pass
+
+    # Fallback: scan the filesystem
+    return _scan_ollama_filesystem()
 
 
 VISION_MODEL_KEYWORDS = ['llava', 'llama3.2-vision', 'bakllava', 'moondream']
@@ -159,8 +188,13 @@ def check_stack():
         _ol.list()
         results.append({'component': 'ollama service', 'ok': True, 'detail': 'running'})
     except Exception:
-        results.append({'component': 'ollama service', 'ok': False,
-                        'detail': 'not reachable — start Ollama app or run: ollama serve'})
+        fs_models = _scan_ollama_filesystem()
+        if fs_models:
+            results.append({'component': 'ollama service', 'ok': True,
+                            'detail': 'API blocked (VPN/firewall) — using local model registry'})
+        else:
+            results.append({'component': 'ollama service', 'ok': False,
+                            'detail': 'not reachable — start Ollama app or run: ollama serve'})
 
     # 4. Ollama models
     models = get_installed_models()

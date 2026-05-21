@@ -42,9 +42,12 @@ AVAILABLE_MODELS = {
     'llama3.1:8b': 'Llama 3.1 8B (higher accuracy, 4.7 GB)',
     'llama3:8b': 'Llama 3 8B (legacy)',
     'gemma2:9b': 'Gemma 2 9B (alternative, 5.4 GB)',
+    'qwen3:14b': 'Qwen 3 14B (high quality, 9 GB)',
+    'qwen2.5:14b': 'Qwen 2.5 14B (high quality, 9 GB)',
     'qwen2.5:7b': 'Qwen 2.5 7B (alternative, 4.7 GB)',
     'phi4:14b': 'Phi-4 14B (high quality, 9 GB)',
     'mistral': 'Mistral 7B (fast, 4.1 GB)',
+    'mistral:latest': 'Mistral 7B (fast, 4.1 GB)',
     'deepseek-r1:8b': 'DeepSeek-R1 8B (reasoning, 4.9 GB)',
 }
 
