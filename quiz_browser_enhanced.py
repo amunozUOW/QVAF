@@ -37,6 +37,22 @@ except ImportError:
     print("ERROR: Playwright not installed.")
     sys.exit(1)
 
+# Resolve Ollama host BEFORE importing the ollama library, because the
+# client caches the host URL on first import.  Port 11434 is blocked by
+# Cisco Secure Client on university machines; 11435 is the fallback.
+def _probe_ollama_port():
+    import socket
+    for port in [11434, 11435]:
+        try:
+            sock = socket.create_connection(('127.0.0.1', port), timeout=2)
+            sock.close()
+            os.environ['OLLAMA_HOST'] = f'http://127.0.0.1:{port}'
+            return
+        except (ConnectionRefusedError, socket.timeout, OSError):
+            continue
+
+_probe_ollama_port()
+
 try:
     import ollama
 except ImportError:
@@ -293,9 +309,10 @@ Extract ALL text, numbers, and data visible. If it's a table, reproduce it. If i
 
         response = ollama.chat(
             model=OLLAMA_VISION_MODEL,
-            messages=[{'role': 'user', 'content': prompt, 'images': [image_data]}]
+            messages=[{'role': 'user', 'content': prompt, 'images': [image_data]}],
+            think=False,
         )
-        return response['message']['content']
+        return _extract_response_text(response)
     except Exception as e:
         return f"[Image interpretation failed: {e}]"
 
@@ -467,15 +484,32 @@ Your response:"""
 # This centralises the parsing logic so it's tested and consistent everywhere.
 
 
+def _extract_response_text(response):
+    """Extract text from an Ollama response, handling thinking-mode models.
+
+    Models like Qwen3 put their chain-of-thought in a ``thinking`` field
+    and may leave ``content`` empty. We need the content (which contains
+    the ANSWER/PROBABILITY/REASONING block). If content is empty, fall
+    back to the thinking text.
+    """
+    msg = response['message']
+    content = getattr(msg, 'content', '') or msg.get('content', '') if hasattr(msg, 'get') else ''
+    if content.strip():
+        return content
+    thinking = getattr(msg, 'thinking', None) or ''
+    return thinking
+
+
 def call_llm_single(prompt, model):
     """Single LLM call"""
     try:
         response = ollama.chat(
             model=model,
             messages=[{'role': 'user', 'content': prompt}],
-            options={'temperature': 0, 'num_predict': 300}
+            options={'temperature': 0, 'num_predict': 300},
+            think=False,
         )
-        return response['message']['content']
+        return _extract_response_text(response)
     except Exception as e:
         return f"ANSWER: A\nPROBABILITY: 0\nREASONING: Error: {e}"
 
@@ -498,9 +532,10 @@ def call_llm_multi_sample(prompt, model, num_samples):
             response = ollama.chat(
                 model=model,
                 messages=[{'role': 'user', 'content': prompt}],
-                options={'temperature': 0, 'num_predict': 300}
+                options={'temperature': 0, 'num_predict': 300},
+                think=False,
             )
-            text = response['message']['content']
+            text = _extract_response_text(response)
             answer, conf, reasoning = parse_llm_response(text)
             answers.append(answer)
             confidences.append(conf)

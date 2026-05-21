@@ -28,6 +28,21 @@ from collections import Counter
 from typing import Optional, Callable
 from parsing_utils import extract_answer, extract_reasoning
 
+import os
+import socket
+
+def _probe_ollama_port():
+    for port in [11434, 11435]:
+        try:
+            sock = socket.create_connection(('127.0.0.1', port), timeout=2)
+            sock.close()
+            os.environ['OLLAMA_HOST'] = f'http://127.0.0.1:{port}'
+            return
+        except (ConnectionRefusedError, socket.timeout, OSError):
+            continue
+
+_probe_ollama_port()
+
 try:
     import ollama
 except ImportError:
@@ -37,6 +52,15 @@ try:
     from config import DEFAULT_MODEL
 except ImportError:
     DEFAULT_MODEL = "llama3.2:3b"
+
+
+def _extract_response_text(response):
+    """Extract text from Ollama response, handling thinking-mode models."""
+    msg = response['message']
+    content = getattr(msg, 'content', '') or msg.get('content', '') if hasattr(msg, 'get') else ''
+    if content.strip():
+        return content
+    return getattr(msg, 'thinking', None) or ''
 
 
 def ask_question_single(
@@ -72,10 +96,11 @@ REASONING: [One sentence explaining why]"""
             options={
                 'temperature': temperature,
                 'num_predict': 400,
-            }
+            },
+            think=False,
         )
-        
-        text = response['message']['content']
+
+        text = _extract_response_text(response)
 
         # Parse using shared parsing utilities
         answer = extract_answer(text)
