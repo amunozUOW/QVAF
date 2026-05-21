@@ -728,6 +728,45 @@ def validate_question(q_type, options, checkbox_buttons=None, radio_buttons=None
     return q_type, options, checkbox_buttons, radio_buttons, warnings
 
 
+def _select_input(page, input_elem):
+    """Reliably select a radio button or checkbox in Moodle.
+
+    Moodle hides <input> elements with sr-only CSS, so a plain
+    .click(force=True) on the tiny hidden element often fails to
+    trigger the form's change handlers. This helper tries three
+    strategies in order:
+      1. Playwright .check() — the proper way for inputs
+      2. Click the associated <label> — what a real user clicks
+      3. JS: set checked + dispatch change event
+    """
+    # Strategy 1: Playwright check (handles hidden inputs properly)
+    try:
+        input_elem.check(force=True, timeout=2000)
+        input_elem.dispatch_event('change')
+        return
+    except Exception:
+        pass
+
+    # Strategy 2: click the label (the visible element users click)
+    try:
+        label = input_elem.evaluate_handle(
+            'el => el.labels?.[0] || el.closest("div")?.querySelector("label")'
+        )
+        if label:
+            label.as_element().click(timeout=2000)
+            return
+    except Exception:
+        pass
+
+    # Strategy 3: JS direct — set checked and fire events
+    input_elem.evaluate('''el => {
+        el.checked = true;
+        el.dispatchEvent(new Event("click", {bubbles: true}));
+        el.dispatchEvent(new Event("change", {bubbles: true}));
+        el.dispatchEvent(new Event("input", {bubbles: true}));
+    }''')
+
+
 # ============================================
 # SCRAPE AND ANSWER PAGE
 # ============================================
@@ -879,7 +918,7 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
                 for letter in answer_letters:
                     if letter in checkbox_buttons:
                         try:
-                            checkbox_buttons[letter].click(force=True)
+                            _select_input(page, checkbox_buttons[letter])
                             clicked.append(letter)
                         except Exception as e:
                             print(f"       ⚠️  Checkbox click failed for {letter}: {e}", flush=True)
@@ -890,7 +929,7 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
                 # Single-answer: click one radio button
                 if answer in radio_buttons:
                     try:
-                        radio_buttons[answer].click(force=True)
+                        _select_input(page, radio_buttons[answer])
                         print(f"[PROGRESS] Q{q_num} → Answer: {answer} (confidence: {confidence}%)", flush=True)
                     except Exception as e:
                         print(f"       ⚠️  Click failed: {e}", flush=True)
