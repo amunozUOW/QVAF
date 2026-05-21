@@ -14,17 +14,42 @@ This module:
 """
 
 import json
+import os
 import re
+import socket
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+
+def _probe_ollama_port():
+    """Set OLLAMA_HOST before importing ollama — the library caches the URL on import."""
+    for port in [11434, 11435]:
+        try:
+            sock = socket.create_connection(('127.0.0.1', port), timeout=2)
+            sock.close()
+            os.environ['OLLAMA_HOST'] = f'http://127.0.0.1:{port}'
+            return
+        except (ConnectionRefusedError, socket.timeout, OSError):
+            continue
+
+_probe_ollama_port()
 
 try:
     import ollama
 except ImportError:
     print("ERROR: ollama not installed. Run: pip install ollama")
     sys.exit(1)
+
+
+def _extract_response_text(response):
+    """Extract text from Ollama response, handling thinking-mode models like Qwen3."""
+    msg = response['message']
+    content = getattr(msg, 'content', '') or msg.get('content', '') if hasattr(msg, 'get') else ''
+    if content.strip():
+        return content
+    return getattr(msg, 'thinking', None) or ''
 
 # Import config for output paths and default model
 try:
@@ -485,6 +510,17 @@ def _prepare_stem(question_text):
     return stem.strip()
 
 
+# Keywords that indicate a question requires calculation, visual interpretation,
+# or procedural application — even if it starts with "What is..."
+_RECALL_ESCAPE_KEYWORDS = re.compile(
+    r'(?:calculate|compute|figure below|figure above|image below|image above'
+    r'|formula|formulas|use the .{0,30}formula|hint:|workshop|simulation'
+    r'|for the (?:data|table|chart|graph|diagram|figure)'
+    r'|productivity for|how (?:many|much)|what (?:value|amount|total|sum|result))',
+    re.IGNORECASE,
+)
+
+
 def _is_recall_by_stem(question_text):
     """
     Rule-based pre-classifier: check if the question stem is a direct
@@ -498,6 +534,12 @@ def _is_recall_by_stem(question_text):
     options are present, despite explicit instructions to focus on the stem.
     """
     stem = _prepare_stem(question_text)
+
+    # Escape hatch: if the stem contains calculation/visual keywords,
+    # it's likely Routine Application even if it starts with "What is..."
+    if _RECALL_ESCAPE_KEYWORDS.search(stem):
+        return False
+
     for pattern in RECALL_STEM_PATTERNS:
         if re.search(pattern, stem, re.IGNORECASE):
             return True
@@ -757,9 +799,10 @@ KEY COGNITIVE DEMAND: Understanding relationships between ideas
         response = ollama.chat(
             model=ANALYSIS_MODEL,
             messages=[{'role': 'user', 'content': prompt}],
-            options={'temperature': 0, 'num_predict': 256}
+            options={'temperature': 0, 'num_predict': 256},
+            think=False,
         )
-        return response['message']['content']
+        return _extract_response_text(response)
     except Exception as e:
         return f"CATEGORY: UNKNOWN\nRATIONALE: Classification failed: {e}"
 
@@ -827,11 +870,81 @@ def extract_question_category(classification_text):
 # ANALYSIS GENERATION (for SME review)
 # ============================================
 
+def _build_question_features_text(question_features):
+    """Build a human-readable summary of question features for the analysis prompt."""
+    if not question_features:
+        return ""
+
+    lines = []
+    if question_features.get('has_images'):
+        lines.append(f"- Contains {question_features.get('image_count', 0)} image(s) embedded in the question")
+    if question_features.get('has_image_options'):
+        count = question_features.get('image_option_count', 0)
+        total = question_features.get('total_options', 0)
+        if count == total and total > 0:
+            lines.append(f"- ALL {count} answer options are images (no text) — AI must interpret visual data to answer")
+        else:
+            lines.append(f"- {count} of {total} answer options are images — AI must interpret visual data for these")
+    if question_features.get('links_scraped', 0) > 0:
+        lines.append(f"- References {question_features['links_scraped']} external link(s)")
+    if question_features.get('correct_answer_unknown'):
+        lines.append("- Correct answer could not be extracted from Moodle (marked UNKNOWN)")
+
+    # Distractor similarity analysis
+    if question_features.get('option_similarity'):
+        lines.append(f"- Distractor similarity: {question_features['option_similarity']}")
+
+    if not lines:
+        return ""
+    return "QUESTION FEATURES:\n" + "\n".join(lines)
+
+
+def _analyse_option_similarity(options):
+    """Assess how similar the answer options are to each other.
+
+    Returns a short description: 'high' if options share significant
+    overlapping phrasing, 'low' if they are clearly distinct.
+    """
+    if not options or len(options) < 2:
+        return "insufficient options"
+
+    texts = [v.lower().strip() for v in options.values() if v and '[Image option' not in v]
+    if len(texts) < 2:
+        return "image-based options"
+
+    # Check how many words are shared across all options
+    word_sets = [set(t.split()) for t in texts]
+    common_words = word_sets[0]
+    for ws in word_sets[1:]:
+        common_words = common_words & ws
+
+    # Remove stopwords from the overlap count
+    stopwords = {'the', 'a', 'an', 'is', 'are', 'of', 'to', 'in', 'and', 'or', 'for', 'that', 'with', 'on', 'by', 'at', 'from', 'as', 'be', 'it', 'this', 'was', 'not'}
+    meaningful_overlap = common_words - stopwords
+
+    avg_words = sum(len(ws) for ws in word_sets) / len(word_sets)
+    if avg_words == 0:
+        return "very short options"
+
+    overlap_ratio = len(meaningful_overlap) / avg_words
+    if overlap_ratio > 0.4:
+        return f"high overlap ({len(meaningful_overlap)} shared content words) — options require careful discrimination"
+    elif overlap_ratio > 0.2:
+        return f"moderate overlap ({len(meaningful_overlap)} shared content words)"
+
+    # Check for long options (paragraph-length distractors)
+    long_count = sum(1 for t in texts if len(t.split()) > 30)
+    if long_count >= 3:
+        return "long paragraph-length options — requires careful reading to discriminate"
+
+    return "distinct options"
+
+
 def analyse_question(question_text, options, correct_answer,
                      answer_without, conf_without, reasoning_without,
                      answer_with, conf_with, reasoning_with,
                      correctness_pattern, question_type, confidence_flag,
-                     is_basic_mode=False):
+                     is_basic_mode=False, question_features=None):
     """
     Generate per-question vulnerability analysis for the educator.
 
@@ -840,12 +953,13 @@ def analyse_question(question_text, options, correct_answer,
     confidence or correctness. The educator decides what action to take.
 
     is_basic_mode: When True, only baseline (no RAG) data is shown.
+    question_features: Dict with metadata about images, links, option types.
     """
 
     options_text = "\n".join([f"{k}. {v}" for k, v in options.items()]) if options else "N/A"
     pattern_desc = get_pattern_description(correctness_pattern)
+    features_text = _build_question_features_text(question_features)
 
-    # System message establishing the agent's role and perspective
     system_message = """You are an objective, third-party assessment vulnerability advisor working on behalf of an educator. Your role is to help the educator understand how and why an AI was able (or unable) to answer their quiz questions correctly.
 
 YOUR PERSPECTIVE:
@@ -854,13 +968,21 @@ YOUR PERSPECTIVE:
 - Your recommendations should focus on how to REDUCE AI confidence and REDUCE the likelihood that AI will arrive at the correct answer, so that the assessment better measures genuine student understanding.
 - You are unbiased and evidence-driven. You do not advocate for the AI or soften findings about AI capabilities.
 - When the AI got a question right, explain what structural or content features allowed it to succeed, and suggest how those features could be altered.
-- When the AI got a question wrong, explain what made the question resistant to AI and what properties the educator should preserve or replicate in other questions."""
+- When the AI got a question wrong, explain what made the question resistant to AI and what properties the educator should preserve or replicate in other questions.
+
+IMPORTANT ANALYSIS GUIDELINES:
+- If the question contains images or image-based options, assess whether the question's difficulty depends on correctly interpreting visual data (charts, diagrams, simulation output). Image-dependent questions are naturally harder for AI because current vision models are less reliable than text processing.
+- If options are long and share overlapping phrasing, assess whether the AI could use surface-level pattern matching (keyword frequency, answer length, hedging language) rather than genuine understanding.
+- If the question references a specific simulation, workshop exercise, or local context, note this as a natural AI defence — the AI cannot access unpublished materials.
+- Examine the AI's reasoning carefully: did it demonstrate genuine domain understanding, or did it arrive at the answer through elimination, keyword matching, or general knowledge that happens to be correct?
+- If the correct answer is UNKNOWN (could not be verified), note this limitation."""
 
     if is_basic_mode:
-        # Basic mode prompt - no RAG/course materials section
+        ai_result = "CORRECT" if correctness_pattern in ['CORRECT_BOTH', 'CORRECT_BASELINE_ONLY'] else "INCORRECT"
         prompt = f"""{teqsa_guidance}
 
 QUESTION TYPE: {question_type}
+{features_text}
 
 QUESTION:
 {question_text}
@@ -875,33 +997,42 @@ AI PERFORMANCE:
 - Confidence: {conf_without}%
 - Reasoning: {reasoning_without}
 
-AI RESULT: {"CORRECT" if correctness_pattern in ['CORRECT_BOTH', 'CORRECT_BASELINE_ONLY'] else "INCORRECT"}
+AI RESULT: {ai_result}
 {f"ATTENTION: {confidence_flag}" if confidence_flag else ""}
 
-Analyse this question from the educator's perspective. Your job is to help them understand what made this question easy or difficult for the AI, and what they could change to reduce AI performance on it.
+Analyse this question from the educator's perspective. Provide a thorough assessment covering:
 
-1. VULNERABILITY ANALYSIS (2-3 sentences):
-   - What specific features of this question (structure, content, option design, cognitive demand) made it easy or difficult for the AI?
-   - Did the AI's reasoning reveal genuine understanding, or did it exploit surface-level patterns, common phrasing, or process-of-elimination to arrive at the answer?
+1. VULNERABILITY ANALYSIS (3-5 sentences):
+   - What specific features of this question (structure, content, option design, cognitive demand, visual elements) made it easy or difficult for the AI?
+   - Did the AI's reasoning reveal genuine understanding, or did it exploit surface-level patterns (common phrasing, keyword matching, process-of-elimination, answer length heuristics)?
    - How does the question type ({question_type}) contribute to or protect against AI success?
+   - If the question depends on images, simulations, or local context, how does this affect AI vulnerability?
 
-2. RECOMMENDATIONS FOR EDUCATOR:
-   - What concrete changes could the educator make to this question to reduce AI confidence or reduce the likelihood of AI selecting the correct answer?
-   - If the AI already failed on this question, what properties of the question should the educator preserve or replicate in other questions?
-   - Focus on actionable, specific suggestions (e.g., requiring application of local/unpublished context, adding plausible distractors, requiring multi-step reasoning, embedding scenario-specific details).
+2. DISTRACTOR QUALITY (2-3 sentences):
+   - Are the incorrect options (distractors) plausible enough to challenge both AI and students?
+   - Could the AI eliminate distractors using surface features (e.g., one option is much longer/more detailed, or contains hedging language like "may" or "could")?
+   - Would a student who partially understands the material be drawn to a specific distractor?
 
-Format your response as:
+3. RECOMMENDATIONS FOR EDUCATOR (3-5 bullet points):
+   - What concrete, specific changes could reduce AI confidence or AI correctness on this question?
+   - If the AI failed, what properties should the educator preserve or replicate?
+   - Consider: embedding unpublished context, strengthening distractors, requiring multi-step reasoning, adding image-dependent calculations, referencing specific workshop/simulation outputs.
+
+Format your response EXACTLY as:
 VULNERABILITY ANALYSIS:
 [your analysis]
 
+DISTRACTOR QUALITY:
+[your distractor assessment]
+
 RECOMMENDATIONS FOR EDUCATOR:
-[your recommendations]
+[your recommendations as bullet points]
 """
     else:
-        # Full mode prompt - includes RAG comparison
         prompt = f"""{teqsa_guidance}
 
 QUESTION TYPE: {question_type}
+{features_text}
 
 QUESTION:
 {question_text}
@@ -925,27 +1056,36 @@ CORRECTNESS PATTERN: {correctness_pattern}
 ({pattern_desc})
 {f"ATTENTION: {confidence_flag}" if confidence_flag else ""}
 
-Analyse this question from the educator's perspective. Your job is to help them understand what made this question easy or difficult for the AI, and what they could change to reduce AI performance on it.
+Analyse this question from the educator's perspective. Provide a thorough assessment covering:
 
-1. VULNERABILITY ANALYSIS (2-3 sentences):
-   - What specific features of this question (structure, content, option design, cognitive demand) made it easy or difficult for the AI?
-   - Did the AI's reasoning reveal genuine understanding, or did it exploit surface-level patterns, common phrasing, or process-of-elimination to arrive at the answer?
+1. VULNERABILITY ANALYSIS (3-5 sentences):
+   - What specific features of this question (structure, content, option design, cognitive demand, visual elements) made it easy or difficult for the AI?
+   - Did the AI's reasoning reveal genuine understanding, or did it exploit surface-level patterns (common phrasing, keyword matching, process-of-elimination, answer length heuristics)?
    - What does the difference (or lack of difference) between baseline and RAG performance tell the educator about this question's reliance on general knowledge vs. course-specific content?
    - How does the question type ({question_type}) contribute to or protect against AI success?
+   - If the question depends on images, simulations, or local context, how does this affect AI vulnerability?
 
-2. RECOMMENDATIONS FOR EDUCATOR:
-   - What concrete changes could the educator make to this question to reduce AI confidence or reduce the likelihood of AI selecting the correct answer?
-   - If the AI already failed on this question, what properties of the question should the educator preserve or replicate in other questions?
-   - Focus on actionable, specific suggestions (e.g., requiring application of local/unpublished context, adding plausible distractors, requiring multi-step reasoning, embedding scenario-specific details).
+2. DISTRACTOR QUALITY (2-3 sentences):
+   - Are the incorrect options (distractors) plausible enough to challenge both AI and students?
+   - Could the AI eliminate distractors using surface features (e.g., one option is much longer/more detailed, or contains hedging language like "may" or "could")?
+   - Would a student who partially understands the material be drawn to a specific distractor?
 
-Format your response as:
+3. RECOMMENDATIONS FOR EDUCATOR (3-5 bullet points):
+   - What concrete, specific changes could reduce AI confidence or AI correctness on this question?
+   - If the AI failed, what properties should the educator preserve or replicate?
+   - Consider: embedding unpublished context, strengthening distractors, requiring multi-step reasoning, adding image-dependent calculations, referencing specific workshop/simulation outputs.
+
+Format your response EXACTLY as:
 VULNERABILITY ANALYSIS:
 [your analysis]
 
+DISTRACTOR QUALITY:
+[your distractor assessment]
+
 RECOMMENDATIONS FOR EDUCATOR:
-[your recommendations]
+[your recommendations as bullet points]
 """
-    
+
     try:
         global ANALYSIS_MODEL
         response = ollama.chat(
@@ -954,9 +1094,10 @@ RECOMMENDATIONS FOR EDUCATOR:
                 {'role': 'system', 'content': system_message},
                 {'role': 'user', 'content': prompt}
             ],
-            options={'temperature': 0, 'num_predict': 1024}
+            options={'temperature': 0, 'num_predict': 1024},
+            think=False,
         )
-        return response['message']['content']
+        return _extract_response_text(response)
     except Exception as e:
         return f"Analysis failed: {e}"
 
@@ -1055,7 +1196,19 @@ def process_quiz(filepath):
             correct_without, conf_without,
             correct_with, conf_with
         )
-        
+
+        # Build question features for richer analysis
+        question_features = {
+            'has_images': q.get('has_images', False),
+            'image_count': q.get('image_count', 0),
+            'has_image_options': q.get('has_image_options', False),
+            'image_option_count': q.get('image_option_count', 0),
+            'total_options': len(options),
+            'links_scraped': q.get('links_scraped', 0),
+            'correct_answer_unknown': correct_answer == 'UNKNOWN',
+            'option_similarity': _analyse_option_similarity(options),
+        }
+
         # Generate analysis for SME
         print(f"  Generating analysis for SME review...")
         analysis = analyse_question(
@@ -1063,9 +1216,10 @@ def process_quiz(filepath):
             answer_without, conf_without, reasoning_without,
             answer_with, conf_with, reasoning_with,
             pattern, question_type, confidence_flag,
-            is_basic_mode=is_basic_mode
+            is_basic_mode=is_basic_mode,
+            question_features=question_features
         )
-        
+
         # Store results
         result = {
             'id': q.get('number', i + 1),
@@ -1080,17 +1234,19 @@ def process_quiz(filepath):
             'consistency_without_rag': q.get('consistency_without_rag'),
             'consistency_with_rag': q.get('consistency_with_rag'),
             'question_type': question_type,
-            'correctness_pattern': pattern,  # Renamed from vulnerability_category
-            'confidence_flag': confidence_flag
+            'correctness_pattern': pattern,
+            'confidence_flag': confidence_flag,
+            'question_features': question_features,
         }
         results.append(result)
-        
+
         qualitative_analyses.append({
             'id': result['id'],
             'question_type': question_type,
-            'correctness_pattern': pattern,  # Renamed from vulnerability_category
+            'correctness_pattern': pattern,
             'confidence_flag': confidence_flag,
-            'analysis': analysis
+            'analysis': analysis,
+            'question_features': question_features,
         })
         
         # Print summary

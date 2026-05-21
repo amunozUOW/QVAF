@@ -865,6 +865,7 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
 
                 letter_index = 0
                 seen_texts = set()
+                image_option_count = 0
 
                 for item in answer_items:
                     # Look for checkbox first, then radio
@@ -886,6 +887,7 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
                             has_img = item.query_selector('img') is not None
                             if has_img:
                                 text = f"[Image option {chr(65 + letter_index)}]"
+                                image_option_count += 1
                             else:
                                 continue
 
@@ -994,6 +996,10 @@ def scrape_and_answer_page(page, use_rag, rag_collection, debug=False, model=Non
                 'type': q_type,
                 'image_paths': image_paths if debug else [],
                 'links_scraped': len(scraped_links),
+                'has_images': bool(image_paths),
+                'image_count': len(image_paths),
+                'has_image_options': image_option_count > 0,
+                'image_option_count': image_option_count,
             }
             
             questions_answered.append(q_result)

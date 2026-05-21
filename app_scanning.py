@@ -464,7 +464,12 @@ def merge_attempts(file1, file2=None, no_rag_score=None, with_rag_score=None):
                 'answer': q2.get('llm_answer', '') if q2 else '',
                 'confidence': q2.get('llm_confidence', 0) if q2 else 0,
                 'reasoning': q2.get('llm_reasoning', '') if q2 else ''
-            }
+            },
+            'has_images': q.get('has_images', False),
+            'image_count': q.get('image_count', 0),
+            'has_image_options': q.get('has_image_options', False),
+            'image_option_count': q.get('image_option_count', 0),
+            'links_scraped': q.get('links_scraped', 0),
         })
 
     # Use passed scores if available, otherwise fall back to file data

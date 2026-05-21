@@ -245,6 +245,19 @@ def generate_html_dashboard(report, source_file):
             conf = r.get('confidence_without_rag', 0) or 0
             metric_without = f"{conf}%"
 
+        # Build feature tags
+        features = r.get('question_features', {})
+        feature_tags = []
+        if features.get('has_images'):
+            feature_tags.append(f'<span style="background:#e3f2fd;padding:2px 6px;border-radius:3px;font-size:11px;">📷 {features.get("image_count", 0)} img</span>')
+        if features.get('has_image_options'):
+            feature_tags.append(f'<span style="background:#fff3e0;padding:2px 6px;border-radius:3px;font-size:11px;">🖼 {features.get("image_option_count", 0)} img opts</span>')
+        if features.get('links_scraped', 0) > 0:
+            feature_tags.append(f'<span style="background:#e8f5e9;padding:2px 6px;border-radius:3px;font-size:11px;">🔗 {features["links_scraped"]} links</span>')
+        if features.get('correct_answer_unknown'):
+            feature_tags.append('<span style="background:#fce4ec;padding:2px 6px;border-radius:3px;font-size:11px;">⚠ unverified</span>')
+        features_html = " ".join(feature_tags) if feature_tags else ""
+
         if is_basic_mode:
             question_rows += f"""
             <tr>
@@ -252,6 +265,7 @@ def generate_html_dashboard(report, source_file):
                 <td>{q_type}</td>
                 <td>{correct_without}</td>
                 <td>{metric_without}</td>
+                <td>{features_html}</td>
             </tr>"""
         else:
             correct_with = '✓' if r.get('correct_with_rag') else '✗'
@@ -269,26 +283,39 @@ def generate_html_dashboard(report, source_file):
                 <td>{metric_without}</td>
                 <td>{correct_with}</td>
                 <td>{metric_with}</td>
+                <td>{features_html}</td>
             </tr>"""
-    
+
     # Generate vulnerability analysis rows (objective, no traffic lights)
     qualitative = report.get('qualitative_analyses', [])
     vulnerability_analysis_rows = ""
-    
+
     for qa in qualitative:
         q_id = qa.get('id', '?')
-        vuln_cat = qa.get('vulnerability_category', 'UNKNOWN')
         q_type = qa.get('question_type', 'UNKNOWN')
         analysis = qa.get('analysis', 'No analysis available')
+
+        # Build feature badges for analysis cards
+        qa_features = qa.get('question_features', {})
+        badge_parts = []
+        if qa_features.get('has_images'):
+            badge_parts.append(f'<span style="background:#e3f2fd;padding:2px 8px;border-radius:12px;font-size:11px;margin-right:4px;">📷 Images</span>')
+        if qa_features.get('has_image_options'):
+            badge_parts.append(f'<span style="background:#fff3e0;padding:2px 8px;border-radius:12px;font-size:11px;margin-right:4px;">🖼 Image Options</span>')
+        if qa_features.get('correct_answer_unknown'):
+            badge_parts.append(f'<span style="background:#fce4ec;padding:2px 8px;border-radius:12px;font-size:11px;margin-right:4px;">⚠ Unverified</span>')
+        badges_html = " ".join(badge_parts)
         
-        # Clean up analysis text
         analysis_html = analysis.replace('\n', '<br>')
-        
+
         vulnerability_analysis_rows += f"""
         <div style="border-left: 4px solid #ccc; padding: 15px; margin-bottom: 15px; background: #f8f9fa; border-radius: 4px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <strong>Question {q_id}</strong>
-                <span style="color: #666;">{q_type}</span>
+                <div>
+                    {badges_html}
+                    <span style="color: #666; margin-left: 8px;">{q_type}</span>
+                </div>
             </div>
             <div style="color: #555; font-size: 14px; line-height: 1.6;">
                 {analysis_html}
@@ -357,6 +384,7 @@ def generate_html_dashboard(report, source_file):
                 <th>Type</th>
                 <th>Result</th>
                 <th>{metric_header}</th>
+                <th>Features</th>
             </tr>"""
         # Chart data - simpler for basic mode
         correct_count = patterns['correct_both'] + patterns['correct_baseline_only']
@@ -410,6 +438,7 @@ def generate_html_dashboard(report, source_file):
                 <th>{metric_header}</th>
                 <th>With Materials</th>
                 <th>{metric_header}</th>
+                <th>Features</th>
             </tr>"""
         # Chart data for full mode
         chart_labels = "['AI Correct (Both Conditions)', 'AI Correct Only With Materials', 'AI Correct Only Without Materials', 'AI Incorrect (Both Conditions)']"
@@ -673,17 +702,34 @@ def generate_html_dashboard(report, source_file):
     return html
 
 
+def _format_features_md(features):
+    """Format question features as compact markdown tags."""
+    if not features:
+        return ""
+    tags = []
+    if features.get('has_images'):
+        tags.append(f"{features.get('image_count', 0)} image(s)")
+    if features.get('has_image_options'):
+        tags.append(f"{features.get('image_option_count', 0)} image option(s)")
+    if features.get('links_scraped', 0) > 0:
+        tags.append(f"{features['links_scraped']} link(s)")
+    if features.get('correct_answer_unknown'):
+        tags.append("answer unverified")
+    return ", ".join(tags)
+
+
 def generate_markdown_report(report, source_file):
-    """Generate simple markdown report with objective data"""
+    """Generate comprehensive markdown report with per-question analysis."""
 
     summary = report['quantitative_summary']
     results = report['question_results']
     actual_scores = report.get('actual_scores')
+    qualitative = report.get('qualitative_analyses', [])
 
     grades = calculate_grades(results, actual_scores)
     patterns = count_by_correctness_pattern(results)
+    grades_by_type = calculate_grades_by_type(results)
 
-    # Check if basic mode (no RAG data)
     is_basic_mode = grades.get('is_basic_mode', False)
 
     md_timestamp = datetime.now().strftime("%-d %B %Y")
@@ -694,9 +740,8 @@ to help you understand why. Use these findings to inform your assessment design.
 This report does not AI-proof your assessment, and the analysis is intended to
 support your professional judgment, not replace it."""
 
-    if is_basic_mode:
-        # Basic mode markdown - no course materials columns
-        md = f"""# Quiz Vulnerability Assessment Report
+    # --- Header and summary metrics ---
+    md = f"""# Quiz Vulnerability Assessment Report
 
 {purpose_text}
 
@@ -708,62 +753,82 @@ Generated: {md_timestamp}
 |--------|-------|
 | Questions Assessed | {grades['total']} |
 | AI Accuracy | {grades['grade_without_rag']}% ({grades['correct_without_rag']} of {grades['total']}) |
-
-## AI Results Summary
-
-| Result | Count | Percentage |
-|--------|-------|------------|
-| AI Correct | {patterns['correct_both'] + patterns['correct_baseline_only']} | {safe_pct(patterns['correct_both'] + patterns['correct_baseline_only'], grades['total'])}% |
-| AI Incorrect | {patterns['incorrect_both'] + patterns['correct_rag_only']} | {safe_pct(patterns['incorrect_both'] + patterns['correct_rag_only'], grades['total'])}% |
-
-## Question-by-Question Breakdown
-
-| Q# | Type | Result |
-|----|------|--------|
 """
+
+    if not is_basic_mode:
+        md += f"| AI Accuracy (With Materials) | {grades['grade_with_rag']}% ({grades['correct_with_rag']} of {grades['total']}) |\n"
+        md += f"| Material Effect | {grades['rag_effect']:+.1f}% |\n"
+
+    # --- AI results summary ---
+    md += "\n## AI Results Summary\n\n"
+    if is_basic_mode:
+        correct_count = patterns['correct_both'] + patterns['correct_baseline_only']
+        incorrect_count = patterns['incorrect_both'] + patterns['correct_rag_only']
+        md += "| Result | Count | Percentage |\n|--------|-------|------------|\n"
+        md += f"| AI Correct | {correct_count} | {safe_pct(correct_count, grades['total'])}% |\n"
+        md += f"| AI Incorrect | {incorrect_count} | {safe_pct(incorrect_count, grades['total'])}% |\n"
+    else:
+        md += "| Result | Count | Percentage |\n|--------|-------|------------|\n"
+        md += f"| AI Correct (Both Conditions) | {patterns['correct_both']} | {safe_pct(patterns['correct_both'], grades['total'])}% |\n"
+        md += f"| AI Correct Only With Materials | {patterns['correct_rag_only']} | {safe_pct(patterns['correct_rag_only'], grades['total'])}% |\n"
+        md += f"| AI Correct Only Without Materials | {patterns['correct_baseline_only']} | {safe_pct(patterns['correct_baseline_only'], grades['total'])}% |\n"
+        md += f"| AI Incorrect (Both Conditions) | {patterns['incorrect_both']} | {safe_pct(patterns['incorrect_both'], grades['total'])}% |\n"
+
+    # --- Accuracy by question type ---
+    if grades_by_type:
+        md += "\n## AI Accuracy by Question Type\n\n"
+        if is_basic_mode:
+            md += "| Question Type | Count | AI Accuracy |\n|---------------|-------|-------------|\n"
+            for qtype, data in sorted(grades_by_type.items()):
+                md += f"| {qtype} | {data['total']} | {data['grade_without']}% |\n"
+        else:
+            md += "| Question Type | Count | No Materials | With Materials | Effect |\n|---------------|-------|--------------|----------------|--------|\n"
+            for qtype, data in sorted(grades_by_type.items()):
+                md += f"| {qtype} | {data['total']} | {data['grade_without']}% | {data['grade_with']}% | {data['rag_effect']:+.1f}% |\n"
+
+    # --- Question-by-question breakdown table ---
+    md += "\n## Question-by-Question Breakdown\n\n"
+    if is_basic_mode:
+        md += "| Q# | Type | Result | Confidence | Features |\n|----|------|--------|------------|----------|\n"
         for r in results:
             q_id = r.get('id', '?')
             q_type = r.get('question_type', 'UNKNOWN')
-            correct_without = '✓' if r.get('correct_without_rag') else '✗'
-            md += f"| {q_id} | {q_type} | {correct_without} |\n"
+            result_icon = '✓' if r.get('correct_without_rag') else '✗'
+            conf = r.get('confidence_without_rag', 0) or 0
+            consistency = r.get('consistency_without_rag')
+            metric = consistency if consistency else f"{conf}%"
+            features = _format_features_md(r.get('question_features', {}))
+            md += f"| {q_id} | {q_type} | {result_icon} | {metric} | {features} |\n"
     else:
-        # Full mode markdown - includes course materials comparison
-        md = f"""# Quiz Vulnerability Assessment Report
-
-{purpose_text}
-
-Generated: {md_timestamp}
-
-## Summary Metrics
-
-| Metric | Value |
-|--------|-------|
-| Questions Assessed | {grades['total']} |
-| AI Accuracy (No Materials) | {grades['grade_without_rag']}% ({grades['correct_without_rag']} of {grades['total']}) |
-| AI Accuracy (With Materials) | {grades['grade_with_rag']}% ({grades['correct_with_rag']} of {grades['total']}) |
-| Material Effect | {grades['rag_effect']:+.1f}% |
-
-## AI Results Summary
-
-| Result | Count | Percentage |
-|--------|-------|------------|
-| AI Correct (Both Conditions) | {patterns['correct_both']} | {safe_pct(patterns['correct_both'], grades['total'])}% |
-| AI Correct Only With Materials | {patterns['correct_rag_only']} | {safe_pct(patterns['correct_rag_only'], grades['total'])}% |
-| AI Correct Only Without Materials | {patterns['correct_baseline_only']} | {safe_pct(patterns['correct_baseline_only'], grades['total'])}% |
-| AI Incorrect (Both Conditions) | {patterns['incorrect_both']} | {safe_pct(patterns['incorrect_both'], grades['total'])}% |
-
-## Question-by-Question Breakdown
-
-| Q# | Type | No Materials | With Materials |
-|----|------|--------------|----------------|
-"""
+        md += "| Q# | Type | No Materials | With Materials | Features |\n|----|------|--------------|----------------|----------|\n"
         for r in results:
             q_id = r.get('id', '?')
             q_type = r.get('question_type', 'UNKNOWN')
             correct_without = '✓' if r.get('correct_without_rag') else '✗'
             correct_with = '✓' if r.get('correct_with_rag') else '✗'
-            md += f"| {q_id} | {q_type} | {correct_without} | {correct_with} |\n"
+            features = _format_features_md(r.get('question_features', {}))
+            md += f"| {q_id} | {q_type} | {correct_without} | {correct_with} | {features} |\n"
 
+    # --- Per-question detailed analysis ---
+    if qualitative:
+        md += "\n## Per-Question Vulnerability Analysis\n\n"
+        md += "*What made each question easy or difficult for the AI, and what you could change.*\n\n"
+
+        for qa in qualitative:
+            q_id = qa.get('id', '?')
+            q_type = qa.get('question_type', 'UNKNOWN')
+            analysis_text = qa.get('analysis', 'No analysis available.')
+            features = _format_features_md(qa.get('question_features', {}))
+
+            md += f"### Question {q_id}\n\n"
+            md += f"**Type:** {q_type}"
+            if features:
+                md += f" | **Features:** {features}"
+            md += "\n\n"
+            md += f"{analysis_text}\n\n"
+            md += "---\n\n"
+
+    md += "\n*Generated by the Quiz Vulnerability Assessment Framework (QVAF)*\n"
     return md
 
 
